@@ -7,6 +7,7 @@ use winit::{
 use wgpu::web_sys;
 use std::borrow::Cow;
 use winit::error::OsError;
+use wgpu_text::{glyph_brush::{Section as TextSection, Text}, BrushBuilder, TextBrush};
 
 const GLOBAL_LOG_FILTER: log::LevelFilter = log::LevelFilter::Info;
 const WEBAPP_CANVAS_ID: &str = "target";
@@ -90,12 +91,15 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         .unwrap();
     surface.configure(&device, &config);
 
+    let font: &[u8] = include_bytes!("../fonts/DejaVuSans.ttf");
+    let mut text_brush = BrushBuilder::using_font_bytes(font).unwrap()
+    /* .initial_cache_size((16_384, 16_384))) */ // use this to avoid resizing cache texture
+        .build(&device, config.width, config.height, config.format);
+    let mut text_section = TextSection::default().add_text(Text::new("Hello World"));
+
     let window = &window;
     event_loop
         .run(move |event, target| {
-            // Have the closure take ownership of the resources.
-            // `event_loop.run` never returns, therefore we must do this to ensure
-            // the resources are properly cleaned up.
             let _ = (&instance, &adapter, &shader, &pipeline_layout);
 
             if let Event::WindowEvent {
@@ -105,6 +109,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
             {
                 match event {
                     WindowEvent::Resized(new_size) => {
+                        text_brush.resize_view(config.width as f32, config.height as f32, &queue);
                         // Reconfigure the surface with the new size
                         //config.width = 500; // new_size.width.max(1);
                         //config.height = 500; // new_size.height.max(1);
@@ -141,6 +146,9 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                                 });
                             rpass.set_pipeline(&render_pipeline);
                             rpass.draw(0..3, 0..1);
+                            
+                            text_brush.queue(&device, &queue, vec![&text_section]).unwrap();
+                            text_brush.draw(&mut rpass);
                         }
 
                         queue.submit(Some(encoder.finish()));

@@ -20,6 +20,7 @@ getrandom = { version = "0.2.14", features = ["js"] }
 web-sys = "0.3.69"
 winit = "0.29.15"
 wgpu = { version = "0.19.4", features = ["webgl"] }
+wgpu_text = "0.8.7"
 #instant = { version = "0.1.12", features = ["wasm-bindgen"] }
 
 [dev-dependencies]
