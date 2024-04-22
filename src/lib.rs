@@ -2,21 +2,49 @@ mod utils;
 
 use wasm_bindgen::prelude::*;
 use winit::{
-    event::{Event, WindowEvent}, event_loop::EventLoop, window::{Window, WindowBuilder}
+    event::{Event, WindowEvent, MouseButton}, event_loop::EventLoop, window::{Window, WindowBuilder, CursorIcon}
 };
 use wgpu::web_sys;
 use std::borrow::Cow;
 use winit::error::OsError;
-use wgpu_text::{glyph_brush::{Section as TextSection, Text}, BrushBuilder, TextBrush};
+use wgpu_text::{glyph_brush::{Section as TextSection, Text}, BrushBuilder};
 
 const GLOBAL_LOG_FILTER: log::LevelFilter = log::LevelFilter::Info;
 const WEBAPP_CANVAS_ID: &str = "target";
 
-const TARGET_DRAW_FPS: f64 = 60.0;
-
 #[wasm_bindgen]
 extern "C" {
     fn alert(s: &str);
+    #[wasm_bindgen(js_namespace = console)]
+    fn log(s: &str);
+}
+
+struct MouseState {
+    pub is_cursor_inside: bool,
+    pub is_left_pressed: bool,
+    pub x: f64,
+    pub y: f64,
+}
+
+impl MouseState {
+    pub fn new() -> Self {
+        MouseState {
+            is_cursor_inside: false,
+            is_left_pressed: false,
+            x: 0.0,
+            y: 0.0,
+        }
+    }
+
+    pub fn to_string(&self) -> String {
+        if self.is_left_pressed {
+            format!("PRESSED. Pos: {} {}", self.x.round(), self.y.round())
+        } else if self.is_cursor_inside {
+            format!("IN BOX. Pos: {} {}", self.x.round(), self.y.round())
+        } else {
+            format!("OUT BOX")
+        }
+    }
 }
 
 async fn run(event_loop: EventLoop<()>, window: Window) {
@@ -26,6 +54,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
 
     let instance = wgpu::Instance::default();
 
+    //window.set_cursor_icon(CursorIcon::Grab);
     let surface = instance.create_surface(&window).unwrap();
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
@@ -95,8 +124,11 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
     let mut text_brush = BrushBuilder::using_font_bytes(font).unwrap()
     /* .initial_cache_size((16_384, 16_384))) */ // use this to avoid resizing cache texture
         .build(&device, config.width, config.height, config.format);
-    let mut text_section = TextSection::default().add_text(Text::new("Hello World"));
+    let mut label_text = "START".to_string();
+    
+    let mut mouse_state = MouseState::new();
 
+    log("Start event loop");
     let window = &window;
     event_loop
         .run(move |event, target| {
@@ -147,12 +179,30 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                             rpass.set_pipeline(&render_pipeline);
                             rpass.draw(0..3, 0..1);
                             
+                            label_text = mouse_state.to_string();
+                            let text_section = TextSection::default().add_text(Text::new(&label_text));
                             text_brush.queue(&device, &queue, vec![&text_section]).unwrap();
                             text_brush.draw(&mut rpass);
                         }
 
                         queue.submit(Some(encoder.finish()));
                         frame.present();
+                        window.request_redraw();
+                    },
+                    WindowEvent::CursorEntered{..} => {
+                        mouse_state.is_cursor_inside = true;
+                    },
+                    WindowEvent::CursorLeft { .. } => {
+                        mouse_state.is_cursor_inside = false;
+                    },
+                    WindowEvent::MouseInput { state, button, .. } => {
+                        if button == MouseButton::Left {
+                            mouse_state.is_left_pressed = state.is_pressed();
+                        }
+                    },
+                    WindowEvent::CursorMoved { position, .. } => {
+                        mouse_state.x = position.x;
+                        mouse_state.y = position.y;
                     }
                     WindowEvent::CloseRequested => target.exit(),
                     _ => {}
@@ -176,12 +226,12 @@ fn create_window<T>(event_loop: &EventLoop<T>) -> Result<Window, OsError> {
 
 #[wasm_bindgen(start)]
 pub fn start() {
-    alert("Hello, hello-wasm!");
+    //alert("Hello, hello-wasm!");
     std::panic::set_hook(Box::new(console_error_panic_hook::hook));
     console_log::init().expect("could not initialize logger");
 
     let event_loop = EventLoop::new().unwrap();
-    let window = create_window(&event_loop).unwrap();;
+    let window = create_window(&event_loop).unwrap();
 
     wasm_bindgen_futures::spawn_local(run(event_loop, window));
 }
