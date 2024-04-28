@@ -1,13 +1,19 @@
 mod utils;
+mod render;
+mod mouse;
 
 use wasm_bindgen::prelude::*;
 use winit::{
-    event::{Event, WindowEvent, MouseButton}, event_loop::EventLoop, window::{Window, WindowBuilder, CursorIcon}
+    event::{Event, WindowEvent, MouseButton}, event_loop::EventLoop, window::{Window, WindowBuilder}
 };
 use wgpu::web_sys;
-use std::borrow::Cow;
 use winit::error::OsError;
 use wgpu_text::{glyph_brush::{Section as TextSection, Text}, BrushBuilder};
+
+use render::{VERTICES, setup_render};
+use wgpu::util::DeviceExt;
+
+use mouse::MouseState;
 
 const GLOBAL_LOG_FILTER: log::LevelFilter = log::LevelFilter::Info;
 const WEBAPP_CANVAS_ID: &str = "target";
@@ -19,43 +25,14 @@ extern "C" {
     fn log(s: &str);
 }
 
-struct MouseState {
-    pub is_cursor_inside: bool,
-    pub is_left_pressed: bool,
-    pub x: f64,
-    pub y: f64,
-}
 
-impl MouseState {
-    pub fn new() -> Self {
-        MouseState {
-            is_cursor_inside: false,
-            is_left_pressed: false,
-            x: 0.0,
-            y: 0.0,
-        }
-    }
 
-    pub fn to_string(&self) -> String {
-        if self.is_left_pressed {
-            format!("PRESSED. Pos: {} {}", self.x.round(), self.y.round())
-        } else if self.is_cursor_inside {
-            format!("IN BOX. Pos: {} {}", self.x.round(), self.y.round())
-        } else {
-            format!("OUT BOX")
-        }
-    }
-}
-
-async fn run(event_loop: EventLoop<()>, window: Window) {
-    let mut size = window.inner_size();
-    size.width = size.width.max(500);
-    size.height = size.height.max(500);
-
+async fn init_screen<'a>(window: &'a Window) ->
+(wgpu::Surface<'a>, wgpu::Adapter, wgpu::Device, wgpu::Queue) {
     let instance = wgpu::Instance::default();
 
     //window.set_cursor_icon(CursorIcon::Grab);
-    let surface = instance.create_surface(&window).unwrap();
+    let surface = instance.create_surface(window).unwrap();
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::default(),
@@ -81,44 +58,25 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         .await
         .expect("Failed to create device");
 
-    // Load the shaders from disk
-    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: None,
-        source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-    });
+    return (surface, adapter, device, queue);
+}
 
-    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        label: None,
-        bind_group_layouts: &[],
-        push_constant_ranges: &[],
-    });
-
-    let swapchain_capabilities = surface.get_capabilities(&adapter);
-    let swapchain_format = swapchain_capabilities.formats[0];
-
-    let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: None,
-        layout: Some(&pipeline_layout),
-        vertex: wgpu::VertexState {
-            module: &shader,
-            entry_point: "vs_main",
-            buffers: &[],
-        },
-        fragment: Some(wgpu::FragmentState {
-            module: &shader,
-            entry_point: "fs_main",
-            targets: &[Some(swapchain_format.into())],
-        }),
-        primitive: wgpu::PrimitiveState::default(),
-        depth_stencil: None,
-        multisample: wgpu::MultisampleState::default(),
-        multiview: None,
-    });
-
+async fn run(event_loop: EventLoop<()>, window: Window) {
+    let mut size = window.inner_size();
+    size.width = size.width.max(500);
+    size.height = size.height.max(500);
+    let (surface, adapter, device, queue) = init_screen(&window).await;
     let mut config = surface
         .get_default_config(&adapter, size.width, size.height)
         .unwrap();
     surface.configure(&device, &config);
+
+    let render_pipeline = setup_render(&device, &surface, &adapter, &config);
+    let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Vertex Buffer"),
+        contents: bytemuck::cast_slice(VERTICES),
+        usage: wgpu::BufferUsages::VERTEX,
+    });
 
     let font: &[u8] = include_bytes!("../fonts/DejaVuSans.ttf");
     let mut text_brush = BrushBuilder::using_font_bytes(font).unwrap()
@@ -130,9 +88,10 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
 
     log("Start event loop");
     let window = &window;
+    
     event_loop
         .run(move |event, target| {
-            let _ = (&instance, &adapter, &shader, &pipeline_layout);
+            //let _ = (&instance, &adapter, &shader, &pipeline_layout);
 
             if let Event::WindowEvent {
                 window_id: _,
@@ -168,7 +127,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                                         view: &view,
                                         resolve_target: None,
                                         ops: wgpu::Operations {
-                                            load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
+                                            load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
                                             store: wgpu::StoreOp::Store,
                                         },
                                     })],
@@ -177,7 +136,8 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                                     occlusion_query_set: None,
                                 });
                             rpass.set_pipeline(&render_pipeline);
-                            rpass.draw(0..3, 0..1);
+                            rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
+                            rpass.draw(0..6, 0..1);
                             
                             label_text = mouse_state.to_string();
                             let text_section = TextSection::default().add_text(Text::new(&label_text));
@@ -213,7 +173,6 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
 }
 
 fn create_window<T>(event_loop: &EventLoop<T>) -> Result<Window, OsError> {
-    use wasm_bindgen::JsCast;
     use winit::platform::web::WindowBuilderExtWebSys;
     let dom_window = web_sys::window().unwrap();
     let dom_document = dom_window.document().unwrap();
