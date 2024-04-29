@@ -8,11 +8,8 @@ use winit::{
 };
 use wgpu::web_sys;
 use winit::error::OsError;
-use wgpu_text::{glyph_brush::{Section as TextSection, Text}, BrushBuilder};
 
-use render::{VERTICES, setup_render};
-use wgpu::util::DeviceExt;
-
+use render::Render;
 use mouse::MouseState;
 
 const GLOBAL_LOG_FILTER: log::LevelFilter = log::LevelFilter::Info;
@@ -62,28 +59,7 @@ async fn init_screen<'a>(window: &'a Window) ->
 }
 
 async fn run(event_loop: EventLoop<()>, window: Window) {
-    let mut size = window.inner_size();
-    size.width = size.width.max(500);
-    size.height = size.height.max(500);
-    let (surface, adapter, device, queue) = init_screen(&window).await;
-    let mut config = surface
-        .get_default_config(&adapter, size.width, size.height)
-        .unwrap();
-    surface.configure(&device, &config);
-
-    let render_pipeline = setup_render(&device, &surface, &adapter, &config);
-    let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Vertex Buffer"),
-        contents: bytemuck::cast_slice(VERTICES),
-        usage: wgpu::BufferUsages::VERTEX,
-    });
-
-    let font: &[u8] = include_bytes!("../fonts/DejaVuSans.ttf");
-    let mut text_brush = BrushBuilder::using_font_bytes(font).unwrap()
-    /* .initial_cache_size((16_384, 16_384))) */ // use this to avoid resizing cache texture
-        .build(&device, config.width, config.height, config.format);
-    let mut label_text = "START".to_string();
-    
+    let mut render_state = Render::new(&window).await;    
     let mut mouse_state = MouseState::new();
 
     log("Start event loop");
@@ -100,7 +76,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
             {
                 match event {
                     WindowEvent::Resized(new_size) => {
-                        text_brush.resize_view(config.width as f32, config.height as f32, &queue);
+                        //text_brush.resize_view(config.width as f32, config.height as f32, &queue);
                         // Reconfigure the surface with the new size
                         //config.width = 500; // new_size.width.max(1);
                         //config.height = 500; // new_size.height.max(1);
@@ -109,44 +85,9 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                         //window.request_redraw();
                     }
                     WindowEvent::RedrawRequested => {
-                        let frame = surface
-                            .get_current_texture()
-                            .expect("Failed to acquire next swap chain texture");
-                        let view = frame
-                            .texture
-                            .create_view(&wgpu::TextureViewDescriptor::default());
-                        let mut encoder =
-                            device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                                label: None,
-                            });
-                        {
-                            let mut rpass =
-                                encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                                    label: None,
-                                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                        view: &view,
-                                        resolve_target: None,
-                                        ops: wgpu::Operations {
-                                            load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
-                                            store: wgpu::StoreOp::Store,
-                                        },
-                                    })],
-                                    depth_stencil_attachment: None,
-                                    timestamp_writes: None,
-                                    occlusion_query_set: None,
-                                });
-                            rpass.set_pipeline(&render_pipeline);
-                            rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
-                            rpass.draw(0..6, 0..1);
-                            
-                            label_text = mouse_state.to_string();
-                            let text_section = TextSection::default().add_text(Text::new(&label_text));
-                            text_brush.queue(&device, &queue, vec![&text_section]).unwrap();
-                            text_brush.draw(&mut rpass);
-                        }
+                        render_state.text = mouse_state.to_string();
+                        render_state.render();
 
-                        queue.submit(Some(encoder.finish()));
-                        frame.present();
                         window.request_redraw();
                     },
                     WindowEvent::CursorEntered{..} => {

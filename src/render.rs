@@ -2,6 +2,9 @@
 use bytemuck::{Pod, Zeroable};
 use wgpu::RenderPipeline;
 use std::borrow::Cow;
+use wgpu::util::DeviceExt;
+use wgpu_text::{glyph_brush::{ab_glyph::FontRef, Section as TextSection, Text}, BrushBuilder, TextBrush};
+use winit::window::Window;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
@@ -23,37 +26,160 @@ impl Vertex {
 }
 
 pub const VERTICES: &[Vertex] = &[
-    Vertex {
-        // vertex a
-        position: [-0.5, -0.5],
-        color: [1.0, 0.0, 0.0],
-    },
-    Vertex {
-        // vertex b
-        position: [0.5, -0.5],
-        color: [0.0, 1.0, 0.0],
-    },
-    Vertex {
-        // vertex d
-        position: [-0.5, 0.5],
-        color: [1.0, 1.0, 0.0],
-    },
-    Vertex {
-        // vertex d
-        position: [-0.5, 0.5],
-        color: [1.0, 1.0, 0.0],
-    },
-    Vertex {
-        // vertex b
-        position: [0.5, -0.5],
-        color: [0.0, 1.0, 0.0],
-    },
-    Vertex {
-        // vertex c
-        position: [0.5, 0.5],
-        color: [0.0, 0.0, 1.0],
-    },
+    Vertex { position: [-0.5, -0.5], color: [1.0, 0.0, 0.0] },     // A
+    Vertex { position: [0.5, -0.5], color: [0.0, 1.0, 0.0] },    // B
+    Vertex { position: [0.5, 0.5], color: [0.0, 0.0, 1.0] },     // C
+    Vertex { position: [-0.5, 0.5], color: [1.0, 1.0, 0.0] },      // D
 ];
+
+pub const INDICES: &[u16] = &[
+    0, 1, 3,    // A, B, D
+    3, 1, 2,    // D, B, C
+];
+
+pub struct Render<'a> {
+    surface: wgpu::Surface<'a>,
+    device: wgpu::Device,
+    queue: wgpu::Queue,
+    config: wgpu::SurfaceConfiguration,
+    size: winit::dpi::PhysicalSize<u32>,
+    render_pipeline: wgpu::RenderPipeline,
+
+    vertex_buffer: wgpu::Buffer,
+    index_buffer: wgpu::Buffer,
+
+    text_brush: TextBrush<FontRef<'a>>,
+    pub text: String,
+}
+
+impl<'a> Render<'a> {
+    pub async fn new(window: &'a Window) -> Render<'a> {
+        let mut size = window.inner_size();
+        size.width = size.width.max(500);
+        size.height = size.height.max(500);
+        let (surface, adapter, device, queue) = init_screen(&window).await;
+        let mut config = surface
+            .get_default_config(&adapter, size.width, size.height)
+            .unwrap();
+        surface.configure(&device, &config);
+
+        let render_pipeline = setup_render(&device, &surface, &adapter, &config);
+        let (vertex_buffer, index_buffer) = init_vertexes(&device);
+        let text_brush = init_text(&device, &config);
+        Self {
+            surface,
+            device,
+            queue,
+            config,
+            size,
+            render_pipeline,
+            vertex_buffer,
+            index_buffer,
+            text_brush,
+            text: "START".to_string(),
+        }
+    }
+
+    pub fn render(&mut self) -> () {
+        let frame = self.surface
+            .get_current_texture()
+            .expect("Failed to acquire next swap chain texture");
+        let view = frame
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+        let mut encoder =
+            self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: None,
+            });
+        {
+            let mut rpass =
+                encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: None,
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
+            rpass.set_pipeline(&self.render_pipeline);
+            rpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            rpass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            rpass.draw_indexed(0..INDICES.len() as u32, 0, 0..1);
+
+            let text_section = TextSection::default().add_text(Text::new(&self.text));
+            self.text_brush.queue(&self.device, &self.queue, vec![&text_section]).unwrap();
+            self.text_brush.draw(&mut rpass);
+        }
+
+        self.queue.submit(Some(encoder.finish()));
+        frame.present();
+    }
+}
+
+fn init_text<'a>(device: & wgpu::Device, config: &wgpu::SurfaceConfiguration) -> TextBrush<FontRef<'a>> {
+    let font: &[u8] = include_bytes!("../fonts/DejaVuSans.ttf");
+    let mut text_brush = BrushBuilder::using_font_bytes(font).unwrap()
+     /* .initial_cache_size((16_384, 16_384))) */ // use this to avoid resizing cache texture
+        .build(&device, config.width, config.height, config.format);
+    //let mut label_text = "START".to_string();
+    return text_brush;
+}
+
+fn init_vertexes(device: &wgpu::Device) -> (wgpu::Buffer, wgpu::Buffer) {
+    let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Vertex Buffer"),
+        contents: bytemuck::cast_slice(VERTICES),
+        usage: wgpu::BufferUsages::VERTEX,
+    });
+    let index_buffer = device.create_buffer_init(
+        &wgpu::util::BufferInitDescriptor {
+            label: Some("Index Buffer"),
+            contents: bytemuck::cast_slice(INDICES),
+            usage: wgpu::BufferUsages::INDEX,
+        }
+    );
+    return (vertex_buffer, index_buffer)
+}
+
+async fn init_screen<'a>(window: &'a Window) ->
+(wgpu::Surface<'a>, wgpu::Adapter, wgpu::Device, wgpu::Queue) {
+    let instance = wgpu::Instance::default();
+
+    //window.set_cursor_icon(CursorIcon::Grab);
+    let surface = instance.create_surface(window).unwrap();
+    let adapter = instance
+        .request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::default(),
+            force_fallback_adapter: false,
+            // Request an adapter which can render to our surface
+            compatible_surface: Some(&surface),
+        })
+        .await
+        .expect("Failed to find an appropriate adapter");
+
+    // Create the logical device and command queue
+    let (device, queue) = adapter
+        .request_device(
+            &wgpu::DeviceDescriptor {
+                label: None,
+                required_features: wgpu::Features::empty(),
+                // Make sure we use the texture resolution limits from the adapter, so we can support images the size of the swapchain.
+                required_limits: wgpu::Limits::downlevel_webgl2_defaults()
+                    .using_resolution(adapter.limits()),
+            },
+            None,
+        )
+        .await
+        .expect("Failed to create device");
+
+    return (surface, adapter, device, queue);
+}
 
 pub fn setup_render(device: &wgpu::Device, surface: &wgpu::Surface<'_>,
     adapter: &wgpu::Adapter, config: &wgpu::SurfaceConfiguration) -> RenderPipeline {
