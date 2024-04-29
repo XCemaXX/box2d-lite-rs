@@ -25,14 +25,7 @@ impl Vertex {
     }
 }
 
-pub const VERTICES: &[Vertex] = &[
-    Vertex { position: [-0.5, -0.5], color: [1.0, 0.0, 0.0] },     // A
-    Vertex { position: [0.5, -0.5], color: [0.0, 1.0, 0.0] },    // B
-    Vertex { position: [0.5, 0.5], color: [0.0, 0.0, 1.0] },     // C
-    Vertex { position: [-0.5, 0.5], color: [1.0, 1.0, 0.0] },      // D
-];
-
-pub const INDICES: &[u16] = &[
+const INDICES: &[u16] = &[
     0, 1, 3,    // A, B, D
     3, 1, 2,    // D, B, C
 ];
@@ -45,6 +38,7 @@ pub struct Render<'a> {
     size: winit::dpi::PhysicalSize<u32>,
     render_pipeline: wgpu::RenderPipeline,
 
+    verticies: Box<[Vertex]>,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
 
@@ -64,7 +58,7 @@ impl<'a> Render<'a> {
         surface.configure(&device, &config);
 
         let render_pipeline = setup_render(&device, &surface, &adapter, &config);
-        let (vertex_buffer, index_buffer) = init_vertexes(&device);
+        let (vertex_buffer, index_buffer, verticies) = init_vertices(&device);
         let text_brush = init_text(&device, &config);
         Self {
             surface,
@@ -73,6 +67,7 @@ impl<'a> Render<'a> {
             config,
             size,
             render_pipeline,
+            verticies,
             vertex_buffer,
             index_buffer,
             text_brush,
@@ -99,7 +94,13 @@ impl<'a> Render<'a> {
                         view: &view,
                         resolve_target: None,
                         ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
+                            load: wgpu::LoadOp::Clear(
+                                wgpu::Color{ // GREY
+                                    r: 0.66, // 167/256
+                                    g: 0.66,
+                                    b: 0.66,
+                                    a: 1.0,
+                                }),
                             store: wgpu::StoreOp::Store,
                         },
                     })],
@@ -120,6 +121,22 @@ impl<'a> Render<'a> {
         self.queue.submit(Some(encoder.finish()));
         frame.present();
     }
+
+    pub fn move_square(&mut self, x: f32, y: f32) -> () {
+        let size: f32 = 0.25;
+        self.verticies = Box::new([
+            Vertex { position: [x, y-size], color: [1.0, 0.0, 0.0] },     // A
+            Vertex { position: [x + size, y-size], color: [0.0, 1.0, 0.0] },    // B
+            Vertex { position: [x + size, y], color: [0.0, 0.0, 1.0] },     // C
+            Vertex { position: [x, y], color: [1.0, 1.0, 0.0] },      // D);
+        ]);
+
+        self.vertex_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Vertex Buffer"),
+            contents: bytemuck::cast_slice(&*self.verticies),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+    }
 }
 
 fn init_text<'a>(device: & wgpu::Device, config: &wgpu::SurfaceConfiguration) -> TextBrush<FontRef<'a>> {
@@ -131,10 +148,16 @@ fn init_text<'a>(device: & wgpu::Device, config: &wgpu::SurfaceConfiguration) ->
     return text_brush;
 }
 
-fn init_vertexes(device: &wgpu::Device) -> (wgpu::Buffer, wgpu::Buffer) {
+fn init_vertices(device: &wgpu::Device) -> (wgpu::Buffer, wgpu::Buffer, Box<[Vertex]>) {
+    let verticies = Box::new([
+        Vertex { position: [-0.5, -0.5], color: [1.0, 0.0, 0.0] },     // A
+        Vertex { position: [0.5, -0.5], color: [0.0, 1.0, 0.0] },    // B
+        Vertex { position: [0.5, 0.5], color: [0.0, 0.0, 1.0] },     // C
+        Vertex { position: [-0.5, 0.5], color: [1.0, 1.0, 0.0] },      // D);
+    ]);
     let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Vertex Buffer"),
-        contents: bytemuck::cast_slice(VERTICES),
+        contents: bytemuck::cast_slice(&*verticies),
         usage: wgpu::BufferUsages::VERTEX,
     });
     let index_buffer = device.create_buffer_init(
@@ -144,7 +167,7 @@ fn init_vertexes(device: &wgpu::Device) -> (wgpu::Buffer, wgpu::Buffer) {
             usage: wgpu::BufferUsages::INDEX,
         }
     );
-    return (vertex_buffer, index_buffer)
+    return (vertex_buffer, index_buffer, verticies)
 }
 
 async fn init_screen<'a>(window: &'a Window) ->

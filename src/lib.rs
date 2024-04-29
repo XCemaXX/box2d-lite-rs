@@ -99,6 +99,9 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                     WindowEvent::MouseInput { state, button, .. } => {
                         if button == MouseButton::Left {
                             mouse_state.is_left_pressed = state.is_pressed();
+                            let x = (mouse_state.x * 2.0 / window.inner_size().width as f64) - 1.0;
+                            let y = ((window.inner_size().height as f64 - mouse_state.y) * 2.0 / window.inner_size().height as f64) - 1.0;
+                            render_state.move_square(x as f32, y as f32);
                         }
                     },
                     WindowEvent::CursorMoved { position, .. } => {
