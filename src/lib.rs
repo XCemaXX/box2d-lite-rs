@@ -12,7 +12,6 @@ use winit::error::OsError;
 use render::Render;
 use mouse::MouseState;
 
-const GLOBAL_LOG_FILTER: log::LevelFilter = log::LevelFilter::Info;
 const WEBAPP_CANVAS_ID: &str = "target";
 
 #[wasm_bindgen]
@@ -20,42 +19,6 @@ extern "C" {
     fn alert(s: &str);
     #[wasm_bindgen(js_namespace = console)]
     fn log(s: &str);
-}
-
-
-
-async fn init_screen<'a>(window: &'a Window) ->
-(wgpu::Surface<'a>, wgpu::Adapter, wgpu::Device, wgpu::Queue) {
-    let instance = wgpu::Instance::default();
-
-    //window.set_cursor_icon(CursorIcon::Grab);
-    let surface = instance.create_surface(window).unwrap();
-    let adapter = instance
-        .request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::default(),
-            force_fallback_adapter: false,
-            // Request an adapter which can render to our surface
-            compatible_surface: Some(&surface),
-        })
-        .await
-        .expect("Failed to find an appropriate adapter");
-
-    // Create the logical device and command queue
-    let (device, queue) = adapter
-        .request_device(
-            &wgpu::DeviceDescriptor {
-                label: None,
-                required_features: wgpu::Features::empty(),
-                // Make sure we use the texture resolution limits from the adapter, so we can support images the size of the swapchain.
-                required_limits: wgpu::Limits::downlevel_webgl2_defaults()
-                    .using_resolution(adapter.limits()),
-            },
-            None,
-        )
-        .await
-        .expect("Failed to create device");
-
-    return (surface, adapter, device, queue);
 }
 
 async fn run(event_loop: EventLoop<()>, window: Window) {
@@ -67,15 +30,13 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
     
     event_loop
         .run(move |event, target| {
-            //let _ = (&instance, &adapter, &shader, &pipeline_layout);
-
             if let Event::WindowEvent {
                 window_id: _,
                 event,
             } = event
             {
                 match event {
-                    WindowEvent::Resized(new_size) => {
+                    WindowEvent::Resized(_new_size) => {
                         //text_brush.resize_view(config.width as f32, config.height as f32, &queue);
                         // Reconfigure the surface with the new size
                         //config.width = 500; // new_size.width.max(1);
@@ -87,7 +48,6 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                     WindowEvent::RedrawRequested => {
                         render_state.text = mouse_state.to_string();
                         render_state.render();
-
                         window.request_redraw();
                     },
                     WindowEvent::CursorEntered{..} => {
@@ -99,14 +59,15 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                     WindowEvent::MouseInput { state, button, .. } => {
                         if button == MouseButton::Left {
                             mouse_state.is_left_pressed = state.is_pressed();
-                            let x = (mouse_state.x * 2.0 / window.inner_size().width as f64) - 1.0;
-                            let y = ((window.inner_size().height as f64 - mouse_state.y) * 2.0 / window.inner_size().height as f64) - 1.0;
-                            render_state.move_square(x as f32, y as f32);
                         }
                     },
                     WindowEvent::CursorMoved { position, .. } => {
                         mouse_state.x = position.x;
                         mouse_state.y = position.y;
+                        if mouse_state.is_left_pressed {
+                            let (x, y) = coords_to_render(mouse_state.x, mouse_state.y, window.inner_size());
+                            render_state.move_square(x as f32, y as f32);
+                        }
                     }
                     WindowEvent::CloseRequested => target.exit(),
                     _ => {}
@@ -116,15 +77,19 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         .unwrap();
 }
 
+fn coords_to_render(x: f64, y: f64, window_size: winit::dpi::PhysicalSize<u32>) -> (f32, f32) {
+    let xr = (x * 2.0 / window_size.width as f64) - 1.0;
+    let yr = ((window_size.height as f64 - y) * 2.0 /window_size.height as f64) - 1.0;
+    return (xr as f32, yr as f32);
+}
+
 fn create_window<T>(event_loop: &EventLoop<T>) -> Result<Window, OsError> {
     use winit::platform::web::WindowBuilderExtWebSys;
     let dom_window = web_sys::window().unwrap();
     let dom_document = dom_window.document().unwrap();
     let dom_canvas = dom_document.get_element_by_id(WEBAPP_CANVAS_ID).unwrap();
     let canvas = dom_canvas.dyn_into::<web_sys::HtmlCanvasElement>().ok();
-    WindowBuilder::default()
-        .with_canvas(canvas)
-        .build(event_loop)
+    WindowBuilder::default().with_canvas(canvas).build(event_loop)
 }
 
 #[wasm_bindgen(start)]
