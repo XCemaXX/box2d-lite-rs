@@ -1,10 +1,11 @@
-
 use bytemuck::{Pod, Zeroable};
 use wgpu::RenderPipeline;
 use std::borrow::Cow;
 use wgpu::util::DeviceExt;
 use wgpu_text::{glyph_brush::{ab_glyph::FontRef, Section as TextSection, Text}, BrushBuilder, TextBrush};
 use winit::window::Window;
+
+use super::rectangle;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
@@ -56,8 +57,8 @@ pub struct Render<'a> {
 impl<'a> Render<'a> {
     pub async fn new(window: &'a Window) -> Render<'a> {
         let mut size = window.inner_size();
-        size.width = size.width.max(500);
-        size.height = size.height.max(500);
+        size.width = size.width.max(600);
+        size.height = size.height.max(600);
         let (surface, adapter, device, queue) = init_screen(&window).await;
         let config = surface
             .get_default_config(&adapter, size.width, size.height)
@@ -125,13 +126,20 @@ impl<'a> Render<'a> {
         frame.present();
     }
 
-    pub fn move_square(&mut self, x: f32, y: f32) -> () {
-        let size: f32 = 0.25;
-        let border_width: f32 = 0.02;
-        let (v, i) = create_rectangle(x, y, size, border_width, 0);
-        self.vertices = v;
-        self.indices = i;
+    pub fn update_rectangles(&mut self, rectangles: Vec<rectangle::Rectangle>) {
+        let mut index = 0_u16;
+        self.vertices.clear();
+        self.indices.clear();
+        for r in rectangles {
+            let (vertices, indices) = create_rectangle(r, index);
+            self.vertices.extend(vertices.iter());
+            self.indices.extend(indices.iter());
+            index += 8;
+        }
+        self.update_buffers();
+    }
 
+    fn update_buffers(&mut self) {
         self.vertex_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
             contents: bytemuck::cast_slice(&self.vertices),
@@ -146,18 +154,21 @@ impl<'a> Render<'a> {
     }
 }
 
-fn create_rectangle(x: f32, y: f32, size: f32, border_width: f32, index_start: u16) ->
+fn create_rectangle(r: rectangle::Rectangle, index_start: u16) ->
     (Vec<Vertex>, Vec<u16>) {
+    let (x, y) = (r.x, r.y);
+    let (size_x, size_y) = (r.w, r.h);
+    let border_width: f32 = 0.01;
     let vertices: Vec<Vertex> = vec![
         //outer square
-        Vertex { position: [x, y - size], color: [1.0, 0.0, 0.0] },     // A
-        Vertex { position: [x + size, y - size], color: [0.0, 1.0, 0.0] },    // B
-        Vertex { position: [x + size, y], color: [0.0, 0.0, 1.0] },     // C
+        Vertex { position: [x, y - size_y], color: [1.0, 0.0, 0.0] },     // A
+        Vertex { position: [x + size_x, y - size_y], color: [0.0, 1.0, 0.0] },    // B
+        Vertex { position: [x + size_x, y], color: [0.0, 0.0, 1.0] },     // C
         Vertex { position: [x, y], color: [1.0, 1.0, 0.0] },      // D;
         //inner square
-        Vertex { position: [x + border_width, y - size + border_width], color: color_as_array(GREY_COLOR) },     
-        Vertex { position: [x + size - border_width, y - size + border_width], color: color_as_array(GREY_COLOR) },    
-        Vertex { position: [x + size - border_width, y - border_width], color: color_as_array(GREY_COLOR) },     
+        Vertex { position: [x + border_width, y - size_y + border_width], color: color_as_array(GREY_COLOR) },     
+        Vertex { position: [x + size_x - border_width, y - size_y + border_width], color: color_as_array(GREY_COLOR) },    
+        Vertex { position: [x + size_x - border_width, y - border_width], color: color_as_array(GREY_COLOR) },     
         Vertex { position: [x + border_width, y - border_width], color: color_as_array(GREY_COLOR) },
     ];
     let i = index_start;
@@ -180,9 +191,7 @@ fn init_text<'a>(device: & wgpu::Device, config: &wgpu::SurfaceConfiguration) ->
 }
 
 fn init_vertices(device: &wgpu::Device) -> (wgpu::Buffer, wgpu::Buffer, Vec<Vertex>, Vec<u16>) {
-    let border_width: f32 = 0.03;
-    let size: f32 = 1.0;
-    let (v, i) = create_rectangle(-0.5, 0.5, size, border_width, 0);
+    let (v, i) = (Vec::new(), Vec::new());
     let vertex_buffer = device.create_buffer_init(
         &wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),

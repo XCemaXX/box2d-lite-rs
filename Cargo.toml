@@ -22,7 +22,7 @@ winit = "0.29.15"
 wgpu = { version = "0.19.4", features = ["webgl"] }
 wgpu_text = "0.8.7"
 bytemuck = "1.15.0"
-#instant = { version = "0.1.12", features = ["wasm-bindgen"] }
+instant = { version = "0.1.12", features = ["wasm-bindgen"] }
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3.34"

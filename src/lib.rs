@@ -1,6 +1,9 @@
 mod utils;
 mod render;
 mod mouse;
+mod box2d;
+mod rectangle;
+mod physics;
 
 use wasm_bindgen::prelude::*;
 use winit::{
@@ -11,6 +14,7 @@ use winit::error::OsError;
 
 use render::Render;
 use mouse::MouseState;
+use physics::WorldState;
 
 const WEBAPP_CANVAS_ID: &str = "target";
 
@@ -24,10 +28,12 @@ extern "C" {
 async fn run(event_loop: EventLoop<()>, window: Window) {
     let mut render_state = Render::new(&window).await;    
     let mut mouse_state = MouseState::new();
+    let mut world_state = WorldState::new();
 
     log("Start event loop");
     let window = &window;
-    
+    let mut last_time = instant::Instant::now();
+
     event_loop
         .run(move |event, target| {
             if let Event::WindowEvent {
@@ -46,9 +52,22 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                         //window.request_redraw();
                     }
                     WindowEvent::RedrawRequested => {
-                        render_state.text = mouse_state.to_string();
-                        render_state.render();
+                        let dt = last_time.elapsed().as_secs_f32();
+                        last_time = instant::Instant::now();
                         window.request_redraw();
+
+                        world_state.step(dt);
+
+                        let rectangles = world_state.get_rectangles();
+                        let mut s = String::new();
+                        for r in &rectangles {
+                            s = format!("{}\n{:?}", s, r);
+                        }
+                        render_state.update_rectangles(rectangles);
+                        
+
+                        render_state.text = format!("{}\ndt: {:.3}\n{}", mouse_state.to_string(), dt, s);
+                        render_state.render();
                     },
                     WindowEvent::CursorEntered{..} => {
                         mouse_state.is_cursor_inside = true;
@@ -62,11 +81,10 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                         }
                     },
                     WindowEvent::CursorMoved { position, .. } => {
-                        mouse_state.x = position.x;
-                        mouse_state.y = position.y;
+                        let (x, y) = coords_to_render(position.x, position.y, window.inner_size());
+                        mouse_state.set_pos(x, y);
                         if mouse_state.is_left_pressed {
-                            let (x, y) = coords_to_render(mouse_state.x, mouse_state.y, window.inner_size());
-                            render_state.move_square(x as f32, y as f32);
+                            world_state = WorldState::new();
                         }
                     }
                     WindowEvent::CloseRequested => target.exit(),
@@ -80,6 +98,12 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
 fn coords_to_render(x: f64, y: f64, window_size: winit::dpi::PhysicalSize<u32>) -> (f32, f32) {
     let xr = (x * 2.0 / window_size.width as f64) - 1.0;
     let yr = ((window_size.height as f64 - y) * 2.0 /window_size.height as f64) - 1.0;
+    return (xr as f32, yr as f32);
+}
+
+fn len_to_render(diff_x: f32, diff_y: f32, window_size: winit::dpi::PhysicalSize<u32>) -> (f32, f32) {
+    let xr = diff_x * 2.0 / window_size.width as f32;
+    let yr = diff_y * 2.0 / window_size.height as f32;
     return (xr as f32, yr as f32);
 }
 
