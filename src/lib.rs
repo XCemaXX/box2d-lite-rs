@@ -2,7 +2,7 @@ mod utils;
 mod render;
 mod mouse;
 mod box2d;
-mod rectangle;
+mod primitives;
 mod physics;
 
 use wasm_bindgen::prelude::*;
@@ -57,16 +57,19 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                         window.request_redraw();
 
                         world_state.step(dt);
-
                         let rectangles = world_state.get_rectangles();
+                        let collide_points = world_state.get_collide_points();
+
                         let mut s = String::new();
                         for r in &rectangles {
                             s = format!("{}\n{:?}", s, r);
                         }
-                        render_state.update_rectangles(rectangles);
-                        
-
+                        for cp in &collide_points {
+                            s = format!("{}\n{:?}", s, cp);
+                        }
                         render_state.text = format!("{}\ndt: {:.3}\n{}", mouse_state.to_string(), dt, s);
+
+                        render_state.update_frame(rectangles, collide_points);
                         render_state.render();
                     },
                     WindowEvent::CursorEntered{..} => {

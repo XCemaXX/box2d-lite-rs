@@ -1,7 +1,7 @@
 use super::math_utils::Vec2;
 
 pub struct Body {
-	pub position: Vec2,
+	pub position: Vec2, // in the middle of body
     pub rotation: f32,
 
 	pub velocity: Vec2,
@@ -19,14 +19,14 @@ pub struct Body {
     pub inv_i: f32,
 }
 
-impl Body {
-    pub fn default() -> Self {
-        Self {
-            position: Vec2::default(),
+impl Default for Body {
+    fn default() -> Self {
+        Self { 
+            position: Default::default(),
             rotation: 0.0,
-            velocity: Vec2::default(),
+            velocity: Default::default(),
             angular_velocity: 0.0,
-            force: Vec2::default(),
+            force: Default::default(),
             torque: 0.0,
             width: Vec2::new(1.0, 1.0),
             friction: 0.0,
@@ -36,7 +36,9 @@ impl Body {
             inv_i: 0.0,
         }
     }
+}
 
+impl Body {
     pub fn set(&mut self, w: Vec2, m: f32) {
         self.position.set(0.0, 0.0);
         self.rotation = 0.0;
@@ -61,7 +63,7 @@ impl Body {
         }
     }
 
-	pub fn add_force(&mut self, f: Vec2) {
+	pub fn add_force(&mut self, f: &Vec2) {
 		self.force += f;
 	}
 }

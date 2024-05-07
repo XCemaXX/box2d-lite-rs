@@ -1,64 +1,90 @@
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct Vec2 {
     pub x: f32,
     pub y: f32,
 }
 
-pub struct Mat22 {
-    col1: Vec2,
-    col2: Vec2,
+impl Default for Vec2 {
+    fn default() -> Self {
+        Self { x: 0.0, y: 0.0 }
+    }
 }
 
 impl Vec2 {
-    pub fn default() -> Self {
-        Self {
-            x: 0.0, 
-            y: 0.0,
-        }
-    }
     pub fn new(x: f32, y: f32) -> Self {
-        Self {
-            x, 
-            y,
-        }
+        Self { x, y }
     }
+
     pub fn set(&mut self, x: f32, y: f32) {
         self.x = x;
         self.y = y;
     }
+
+    pub fn abs(&self) -> Self {
+        Self::new(f32::abs(self.x), f32::abs(self.y))
+    }
 }
 
-impl std::ops::AddAssign for Vec2 {
-    fn add_assign(&mut self, other: Self) {
+impl std::ops::AddAssign<&Vec2> for Vec2 {
+    fn add_assign(&mut self, other: &Vec2) {
         self.x += other.x;
         self.y += other.y;
     }
 }
 
-impl std::ops::Mul<f32> for Vec2 {
+impl std::ops::Add for &Vec2 {
+    type Output = Vec2;
+    fn add(self, other: Self) -> Self::Output {
+        Vec2::new(self.x + other.x, self.y + other.y)
+    }
+}
+
+impl std::ops::Sub for &Vec2 {
+    type Output = Vec2;
+    fn sub(self, other: Self) -> Self::Output {
+        Vec2::new(self.x - other.x, self.y - other.y)
+    }
+}
+
+pub fn dot(a: &Vec2, b: &Vec2) -> f32 {
+	return a.x * b.x + a.y * b.y;
+}
+
+impl std::ops::Neg for &Vec2 {
+    type Output = Vec2;
+    fn neg(self) -> Self::Output {
+        Vec2::new(-self.x, -self.y)
+    }
+}
+
+// ###########f32
+impl std::ops::Mul<f32> for &Vec2 {
     type Output = Vec2;
     fn mul(self, other: f32) -> Self::Output {
         Vec2::new(self.x * other, self.y * other)
     }
 } 
 
-impl std::ops::Mul<Vec2> for f32 {
+impl std::ops::Mul<&Vec2> for f32 {
     type Output = Vec2;
-    fn mul(self, other: Vec2) -> Self::Output {
+    fn mul(self, other: &Vec2) -> Self::Output {
         Vec2::new(self * other.x, self * other.y)
     }
 }
 
-impl std::ops::Add for Vec2 {
-    type Output = Self;
-    fn add(self, other: Self) -> Self::Output {
-        Vec2::new(self.x + other.x, self.y + other.y)
-    }
+// #################mat22
+pub struct Mat22 {
+    pub col1: Vec2,
+    pub col2: Vec2,
 }
 
 impl Mat22 {
-    pub fn new(angle: f32) -> Self {
+    pub fn new(col1: Vec2, col2: Vec2) -> Self {
+        Self { col1, col2 }
+    }
+
+    pub fn from_angle(angle: f32) -> Self {
         let c = f32::cos(angle);
         let s = f32::sin(angle);
         Self {
@@ -66,30 +92,38 @@ impl Mat22 {
             col2: Vec2::new(-s, c),
         }
     }
-    /*
-	Mat22(const Vec2& col1, const Vec2& col2) : col1(col1), col2(col2) {}
 
-	Mat22 Transpose() const
-	{
-		return Mat22(Vec2(col1.x, col2.x), Vec2(col1.y, col2.y));
-	}
+    pub fn transpose(&self) -> Self {
+        Self::new(
+            Vec2::new(self.col1.x, self.col2.x), 
+            Vec2::new(self.col1.y, self.col2.y)
+        )
+    }
 
-	Mat22 Invert() const
-	{
-		float a = col1.x, b = col2.x, c = col1.y, d = col2.y;
-		Mat22 B;
-		float det = a * d - b * c;
-		assert(det != 0.0f);
-		det = 1.0f / det;
-		B.col1.x =  det * d;	B.col2.x = -det * b;
-		B.col1.y = -det * c;	B.col2.y =  det * a;
-		return B;
-	}*/
+    pub fn abs(&self) -> Self {
+        Self::new(
+            self.col1.abs(),
+            self.col2.abs()
+        )
+    }
 }
 
-/*impl std::ops::Add<Mat22> for Vec2 {
-    type Output = Vec2;
-    fn add(self, other: Mat22) -> Vec2 {
-
+impl std::ops::Mul for &Mat22 {
+    type Output = Mat22;
+    fn mul(self, other: Self) -> Self::Output {
+        Mat22::new(self * &other.col1, self * &other.col2)
     }
-}*/
+}
+
+//################ Combined
+
+impl std::ops::Mul<&Vec2> for &Mat22 {
+    type Output = Vec2;
+
+    fn mul(self, v: &Vec2) -> Self::Output {
+        Vec2::new(
+            self.col1.x * v.x + self.col2.x * v.y,
+            self.col1.y * v.x + self.col2.y * v.y
+        )
+    }
+}

@@ -42,7 +42,7 @@ impl World {
             if body.inv_mass == 0.0 {
                 continue;
             }
-            body.velocity += dt * (self.gravity + inv_mass * force);
+            body.velocity += &(dt * &(&self.gravity + &(inv_mass * &force)));
             body.angular_velocity += dt * body.inv_i * body.torque;
         }
         // Perform pre-steps.
@@ -56,7 +56,7 @@ impl World {
             let angular_velocity = body.borrow().angular_velocity;
             let mut body = body.borrow_mut();
 
-            body.position += dt * velocity;
+            body.position += &(dt * &velocity);
             body.rotation += dt * angular_velocity;
             body.force.set(0.0, 0.0);
             body.torque = 0.0;

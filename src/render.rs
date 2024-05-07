@@ -5,7 +5,7 @@ use wgpu::util::DeviceExt;
 use wgpu_text::{glyph_brush::{ab_glyph::FontRef, Section as TextSection, Text}, BrushBuilder, TextBrush};
 use winit::window::Window;
 
-use super::rectangle;
+use super::primitives::{Rectangle, Point};
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
@@ -126,15 +126,21 @@ impl<'a> Render<'a> {
         frame.present();
     }
 
-    pub fn update_rectangles(&mut self, rectangles: Vec<rectangle::Rectangle>) {
+    pub fn update_frame(&mut self, rectangles: Vec<Rectangle>, points: Vec<Point>) {
         let mut index = 0_u16;
         self.vertices.clear();
         self.indices.clear();
         for r in rectangles {
-            let (vertices, indices) = create_rectangle(r, index);
+            let (vertices, indices) = create_bordered_rectangle(r, index);
             self.vertices.extend(vertices.iter());
             self.indices.extend(indices.iter());
             index += 8;
+        }
+        for p in points {
+            let (vertices, indices) = create_point(p, index);
+            self.vertices.extend(vertices.iter());
+            self.indices.extend(indices.iter());
+            index += 4;
         }
         self.update_buffers();
     }
@@ -154,8 +160,7 @@ impl<'a> Render<'a> {
     }
 }
 
-fn create_rectangle(r: rectangle::Rectangle, index_start: u16) ->
-    (Vec<Vertex>, Vec<u16>) {
+fn create_bordered_rectangle(r: Rectangle, index_start: u16) -> (Vec<Vertex>, Vec<u16>) {
     let (x, y) = (r.x, r.y);
     let (size_x, size_y) = (r.w, r.h);
     let border_width: f32 = 0.01;
@@ -179,6 +184,26 @@ fn create_rectangle(r: rectangle::Rectangle, index_start: u16) ->
         //inner square
         i + 4, i + 5, i + 7,
         i + 7, i + 5, i + 6,
+    ];
+    return (vertices, indices);
+}
+
+fn create_point(p: Point, index_start: u16) -> (Vec<Vertex>, Vec<u16>) {
+    let (x, y) = (p.x, p.y);
+    let size = 0.01;
+    let color_red = [1.0, 0.0, 0.0];
+    let vertices: Vec<Vertex> = vec![
+        //outer square
+        Vertex { position: [x, y - size], color: color_red },     // A
+        Vertex { position: [x + size, y - size], color: color_red },    // B
+        Vertex { position: [x + size, y], color: color_red },     // C
+        Vertex { position: [x, y], color: color_red },      // D;
+    ];
+    let i = index_start;
+    let indices: Vec<u16> = vec![
+        //outer square
+        i + 0, i + 1, i + 3,    // A, B, D
+        i + 3, i + 1, i + 2,    // D, B, C
     ];
     return (vertices, indices);
 }
