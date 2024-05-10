@@ -12,7 +12,7 @@ use super::math_utils::Vec2;
 //   v3 ------ v4
 //        e3
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum EdgeNumbers {
 	NoEdge,
 	Edge1,
@@ -27,7 +27,7 @@ impl Default for EdgeNumbers {
     }
 }
 
-#[derive(Default, Clone, Copy)]
+#[derive(Default, Clone, Copy, PartialEq)]
 pub struct Feature {
     pub in_edge1: EdgeNumbers,
     pub out_edge1: EdgeNumbers,
@@ -35,19 +35,19 @@ pub struct Feature {
     pub out_edge2: EdgeNumbers,
 }
 
-#[derive(Default)]
+#[derive(Default, Copy, Clone)]
 pub struct Contact {
     pub position: Vec2,
     pub normal: Vec2,
-    r1: Vec2,
-    r2: Vec2,
+    pub r1: Vec2,
+    pub r2: Vec2,
     pub separation: f32,
-    pn: f32, // accumulated normal impulse
-    pt: f32, // accumulated tangent impulse
-    pnb: f32, // accumulated normal impulse for position bias
-    mass_normal: f32,
-    mass_tangent: f32,
-    bias: f32,
+    pub pn: f32, // accumulated normal impulse
+    pub pt: f32, // accumulated tangent impulse
+    pub pnb: f32, // accumulated normal impulse for position bias
+    pub mass_normal: f32,
+    pub mass_tangent: f32,
+    pub bias: f32,
     pub feature: Feature,
 }
 

@@ -136,7 +136,7 @@ pub fn collide(contacts: &mut [Contact; MAX_CONTACT_POINT], body_a: &Body, body_
     let abs_c = c.abs();
     let abs_ct = abs_c.transpose();
 
-    	// Box A faces
+    // Box A faces
     let face_a = &(&da.abs() - &h_a) - &(&abs_c * &h_b);
     if face_a.x > 0.0 || face_a.y > 0.0 {
         return 0;
@@ -171,7 +171,7 @@ pub fn collide(contacts: &mut [Contact; MAX_CONTACT_POINT], body_a: &Body, body_
 
 	if face_b.y > RELATIVE_TOL * separation + ABSOLUTE_TOL * h_b.y {
 		axis = Axis::FaceBY;
-		separation = face_b.y;
+		separation = face_b.y; // unused
 		normal = if db.y > 0.0 { rot_b.col2 } else { -&rot_b.col2 };
 	}
 
@@ -232,16 +232,15 @@ pub fn collide(contacts: &mut [Contact; MAX_CONTACT_POINT], body_a: &Body, body_
 	// clip other face with 5 box planes (1 face plane, 4 edge planes)
     let mut clip_points1: [ClipVertex; MAX_CONTACT_POINT] = Default::default();
     let mut clip_points2: [ClipVertex; MAX_CONTACT_POINT] = Default::default();
-    let mut np = 0;
 
     // Clip to box side 1
-	np = clip_segment_to_line(&mut clip_points1, incident_edge, &-&side_normal, neg_side, neg_edge);
+	let np = clip_segment_to_line(&mut clip_points1, incident_edge, &-&side_normal, neg_side, neg_edge);
 	if np < 2 {
         return 0;
     }
 	
     // Clip to negative box side 1
-	np = clip_segment_to_line(&mut clip_points2, clip_points1, &side_normal, pos_side, pos_edge);
+	let np = clip_segment_to_line(&mut clip_points2, clip_points1, &side_normal, pos_side, pos_edge);
     if np < 2 {
         return 0;
     }

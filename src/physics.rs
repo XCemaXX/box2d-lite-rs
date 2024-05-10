@@ -1,40 +1,36 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use super::box2d::{World, Body, Vec2};
+use super::box2d::{World, Body, Vec2, UNMOVABLE_MASS};
 use super::primitives::{Rectangle, Point};
-
-use super::box2d::{collide, Contact, MAX_CONTACT_POINT};
 
 pub struct WorldState {
     world: World,
     pub bodies_storage: Vec<Rc<RefCell<Body>>>,
 }
 
+const SCALE_MULT: f32 = 100.0;
+const GRAVITY: f32 = -20.0;
+
+fn new_scaled_body(w: f32, h: f32, mass: f32, pos_x: f32, pos_y: f32) -> Rc<RefCell<Body>> {
+    Rc::new(RefCell::new(
+        Body::new(w * SCALE_MULT, h * SCALE_MULT, mass, pos_x * SCALE_MULT, pos_y * SCALE_MULT)
+    ))
+}
+
 impl WorldState {
     fn make_bodies() -> Vec<Rc<RefCell<Body>>>{
         let mut bodies_storage = Vec::new();
-        let mut square = Body::default();
-        //square.set(Vec2::new(1.0, 1.0), 200.0);
-        //square.position.set(0.0, 4.0);
-        square.set(Vec2::new(0.2, 0.2), 200.0);
-        square.position.set(0.0, 0.3);
-        bodies_storage.push(Rc::new(RefCell::new(square)));
-        
-        let mut square = Body::default();
-        square.set(Vec2::new(2.0, 0.2), f32::MAX);
-        square.position.set(0.0, -0.5);
-        //square.set(Vec2::new(0.3, 0.3), f32::MAX);
-        //square.position.set(-0.0, -0.5);
-        bodies_storage.push(Rc::new(RefCell::new(square)));
-        //b->Set(Vec2(100.0f, 20.0f), FLT_MAX);
-	    //b->position.Set(0.0f, -0.5f * b->width.y);
+        bodies_storage.push(new_scaled_body(0.2, 0.2, 200.0, 0.0, 0.0));
+
+        bodies_storage.push(new_scaled_body(0.1, 0.1, 100.0, 0.1, -0.2));
+
+        bodies_storage.push(new_scaled_body(2.0, 0.2, UNMOVABLE_MASS, 0.0, -0.5));
         bodies_storage
     }
 
     pub fn new() -> Self {
-        //let gravity = Vec2::new(0.0, -10.0);
-        let gravity = Vec2::new(0.0, -0.04);
+        let gravity = Vec2::new(0.0, GRAVITY);
         let iterations = 10;
         
         let mut world_state = WorldState{ 
@@ -56,29 +52,25 @@ impl WorldState {
         for body in &self.bodies_storage {
             let body = body.borrow();
             res.push(Rectangle {
-                x: body.position.x - body.width.x / 2.0,
-                y: body.position.y + body.width.y / 2.0,
-                h: body.width.y,
-                w: body.width.x,
+                x: (body.position.x - body.width.x / 2.0) / SCALE_MULT,
+                y: (body.position.y + body.width.y / 2.0) / SCALE_MULT,
+                h: body.width.y / SCALE_MULT,
+                w: body.width.x / SCALE_MULT,
             });
         }
         res
     }
 
     pub fn get_collide_points(&self) -> Vec<Point> {
-        let body_a = &self.bodies_storage[0].borrow();
-        let body_b = &self.bodies_storage[1].borrow();
-
-        let mut contacts: [Contact; MAX_CONTACT_POINT] = Default::default();
-        let count = collide(&mut contacts, body_a, body_b);
         let mut res = Vec::new();
-        for i in 0..count {
-            res.push(Point{
-                x: contacts[i].position.x, 
-                y: contacts[i].position.y,
-                });
+        for p in self.world.get_collide_points() {
+            res.push(Point {
+                x: p.x / SCALE_MULT,
+                y: p.y / SCALE_MULT,
+            })
         }
         res
+
     }
 }
 

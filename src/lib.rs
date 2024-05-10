@@ -67,7 +67,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                         for cp in &collide_points {
                             s = format!("{}\n{:?}", s, cp);
                         }
-                        render_state.text = format!("{}\ndt: {:.3}\n{}", mouse_state.to_string(), dt, s);
+                        render_state.text = format!("{}\nfps: {:.3}\n{}", mouse_state.to_string(), 1.0 / dt, s);
 
                         render_state.update_frame(rectangles, collide_points);
                         render_state.render();
@@ -104,7 +104,7 @@ fn coords_to_render(x: f64, y: f64, window_size: winit::dpi::PhysicalSize<u32>) 
     return (xr as f32, yr as f32);
 }
 
-fn len_to_render(diff_x: f32, diff_y: f32, window_size: winit::dpi::PhysicalSize<u32>) -> (f32, f32) {
+fn _len_to_render(diff_x: f32, diff_y: f32, window_size: winit::dpi::PhysicalSize<u32>) -> (f32, f32) {
     let xr = diff_x * 2.0 / window_size.width as f32;
     let yr = diff_y * 2.0 / window_size.height as f32;
     return (xr as f32, yr as f32);

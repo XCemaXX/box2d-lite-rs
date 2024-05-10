@@ -33,6 +33,13 @@ impl std::ops::AddAssign<&Vec2> for Vec2 {
     }
 }
 
+impl std::ops::SubAssign<&Vec2> for Vec2 {
+    fn sub_assign(&mut self, other: &Vec2) {
+        self.x -= other.x;
+        self.y -= other.y;
+    }
+}
+
 impl std::ops::Add for &Vec2 {
     type Output = Vec2;
     fn add(self, other: Self) -> Self::Output {
@@ -48,7 +55,19 @@ impl std::ops::Sub for &Vec2 {
 }
 
 pub fn dot(a: &Vec2, b: &Vec2) -> f32 {
-	return a.x * b.x + a.y * b.y;
+	a.x * b.x + a.y * b.y
+}
+
+pub fn cross_v_v(a: &Vec2, b: &Vec2) -> f32 {
+	a.x * b.y - a.y * b.x
+}
+
+pub fn cross_v_f(a: &Vec2, s: f32) -> Vec2 {
+	Vec2::new(s * a.y, -s * a.x)
+}
+
+pub fn cross_f_v(s: f32, a: &Vec2) -> Vec2 {
+	Vec2::new(-s * a.y, s * a.x)
 }
 
 impl std::ops::Neg for &Vec2 {
@@ -126,4 +145,8 @@ impl std::ops::Mul<&Vec2> for &Mat22 {
             self.col1.y * v.x + self.col2.y * v.y
         )
     }
+}
+
+pub fn clamp(a: f32, low: f32, high: f32) -> f32 {
+	f32::max(low, f32::min(a, high))
 }

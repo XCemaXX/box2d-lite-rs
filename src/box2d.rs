@@ -3,11 +3,8 @@ mod world;
 mod body;
 mod contact;
 mod collide;
+mod arbiter;
 
 pub use world::World;
-pub use body::Body;
+pub use body::{Body, UNMOVABLE_MASS};
 pub use math_utils::Vec2;
-
-// test
-pub use collide::collide;
-pub use contact::{Contact, MAX_CONTACT_POINT};
