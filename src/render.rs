@@ -161,20 +161,25 @@ impl<'a> Render<'a> {
 }
 
 fn create_bordered_rectangle(r: Rectangle, index_start: u16) -> (Vec<Vertex>, Vec<u16>) {
-    let (x, y) = (r.x, r.y);
-    let (size_x, size_y) = (r.w, r.h);
-    let border_width: f32 = 0.01;
+    let corners = math::get_corners(&r);
+    const BORDER_WIDTH: f32 = 0.02;
+    let mut r = r;
+    r.width -= BORDER_WIDTH;
+    r.height -= BORDER_WIDTH;
+    let inner_corners = math::get_corners(&r);
+
     let vertices: Vec<Vertex> = vec![
         //outer square
-        Vertex { position: [x, y - size_y], color: [1.0, 0.0, 0.0] },     // A
-        Vertex { position: [x + size_x, y - size_y], color: [0.0, 1.0, 0.0] },    // B
-        Vertex { position: [x + size_x, y], color: [0.0, 0.0, 1.0] },     // C
-        Vertex { position: [x, y], color: [1.0, 1.0, 0.0] },      // D;
+        Vertex { position: corners[0], color: [1.0, 0.0, 0.0] },     // A
+        Vertex { position: corners[1], color: [0.0, 1.0, 0.0] },    // B
+        Vertex { position: corners[2], color: [0.0, 0.0, 1.0] },     // C
+        Vertex { position: corners[3], color: [1.0, 1.0, 0.0] },      // D;
+
         //inner square
-        Vertex { position: [x + border_width, y - size_y + border_width], color: color_as_array(GREY_COLOR) },     
-        Vertex { position: [x + size_x - border_width, y - size_y + border_width], color: color_as_array(GREY_COLOR) },    
-        Vertex { position: [x + size_x - border_width, y - border_width], color: color_as_array(GREY_COLOR) },     
-        Vertex { position: [x + border_width, y - border_width], color: color_as_array(GREY_COLOR) },
+        Vertex { position: inner_corners[0], color: color_as_array(GREY_COLOR) },     
+        Vertex { position: inner_corners[1], color: color_as_array(GREY_COLOR) },   
+        Vertex { position: inner_corners[2], color: color_as_array(GREY_COLOR) },    
+        Vertex { position: inner_corners[3], color: color_as_array(GREY_COLOR) },
     ];
     let i = index_start;
     let indices: Vec<u16> = vec![
@@ -313,4 +318,71 @@ pub fn setup_render(device: &wgpu::Device, _surface: &wgpu::Surface<'_>,
         multiview: None,
     });
     return render_pipeline;
+}
+
+mod math {
+    use crate::primitives::Rectangle;
+
+    struct Vec2 {
+        pub x: f32,
+        pub y: f32,
+    }
+    struct Mat22 {
+        pub col1: Vec2,
+        pub col2: Vec2,
+    }
+
+    impl Mat22 {
+        fn from_angle(angle: f32) -> Self {
+            let c = f32::cos(angle);
+            let s = f32::sin(angle);
+            Self {
+                col1: Vec2{x: c, y: s},
+                col2: Vec2{x: -s, y: c},
+            }
+        }
+    }
+
+    impl std::ops::Mul<&Vec2> for &Mat22 {
+        type Output = Vec2;
+        fn mul(self, v: &Vec2) -> Self::Output {
+            Vec2{
+                x: self.col1.x * v.x + self.col2.x * v.y,
+                y: self.col1.y * v.x + self.col2.y * v.y
+            }
+        }
+    }
+
+    impl std::ops::Mul<f32> for &Vec2 {
+        type Output = Vec2;
+        fn mul(self, other: f32) -> Self::Output {
+            Vec2{ x: self.x * other, y: self.y * other }
+        }
+    } 
+
+    impl std::ops::Add for &Vec2 {
+        type Output = Vec2;
+        fn add(self, other: Self) -> Self::Output {
+            Vec2{ x: self.x + other.x, y: self.y + other.y}
+        }
+    }
+
+    impl Into<[f32; 2]> for Vec2 {
+        fn into(self) -> [f32; 2] {
+            [self.x, self.y] 
+        }
+    }
+    
+    pub fn get_corners(rect: &Rectangle) -> [[f32; 2]; 4] {
+        let r = Mat22::from_angle(rect.rotation);
+        let center = Vec2{x: rect.center.x, y: rect.center.y};
+        let w = &Vec2{x: rect.width, y: rect.height} * 0.5;
+
+        let left_bot:  [f32; 2] = (&center + &(&r * &Vec2{x: -w.x, y: -w.y})).into();
+        let right_bot: [f32; 2] = (&center + &(&r * &Vec2{x:  w.x, y: -w.y})).into();
+        let right_top: [f32; 2] = (&center + &(&r * &Vec2{x:  w.x, y:  w.y})).into();
+        let left_top:  [f32; 2] = (&center + &(&r * &Vec2{x: -w.x, y:  w.y})).into(); 
+
+        [left_bot, right_bot, right_top, left_top]
+    }
 }

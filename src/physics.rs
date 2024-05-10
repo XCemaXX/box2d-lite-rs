@@ -22,9 +22,7 @@ impl WorldState {
     fn make_bodies() -> Vec<Rc<RefCell<Body>>>{
         let mut bodies_storage = Vec::new();
         bodies_storage.push(new_scaled_body(0.2, 0.2, 200.0, 0.0, 0.0));
-
         bodies_storage.push(new_scaled_body(0.1, 0.1, 100.0, 0.1, -0.2));
-
         bodies_storage.push(new_scaled_body(2.0, 0.2, UNMOVABLE_MASS, 0.0, -0.5));
         bodies_storage
     }
@@ -51,11 +49,13 @@ impl WorldState {
         let mut res = Vec::new();
         for body in &self.bodies_storage {
             let body = body.borrow();
+            let center = &body.position;
+        
             res.push(Rectangle {
-                x: (body.position.x - body.width.x / 2.0) / SCALE_MULT,
-                y: (body.position.y + body.width.y / 2.0) / SCALE_MULT,
-                h: body.width.y / SCALE_MULT,
-                w: body.width.x / SCALE_MULT,
+                center: Point{ x: center.x / SCALE_MULT, y: center.y / SCALE_MULT },
+                width: body.width.x / SCALE_MULT,
+                height: body.width.y / SCALE_MULT,
+                rotation: body.rotation,
             });
         }
         res

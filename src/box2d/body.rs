@@ -75,7 +75,6 @@ impl Body {
         }
     }
 
-
     pub fn sub_velocity(&mut self, r: &Vec2, p: &Vec2) {
         self.velocity -= &(self.inv_mass * p);
         self.angular_velocity -= self.inv_i * cross_v_v(r, p);
