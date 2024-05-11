@@ -1,19 +1,21 @@
 mod utils;
 mod render;
-mod mouse;
+mod input;
 mod box2d;
 mod primitives;
 mod physics;
 
 use wasm_bindgen::prelude::*;
 use winit::{
-    event::{Event, WindowEvent, MouseButton}, event_loop::EventLoop, window::{Window, WindowBuilder}
+    event::{Event, WindowEvent, MouseButton, KeyEvent}, 
+    event_loop::EventLoop, window::{Window, WindowBuilder}
 };
 use wgpu::web_sys;
 use winit::error::OsError;
+use winit::keyboard::PhysicalKey;
 
 use render::Render;
-use mouse::MouseState;
+use input::InputState;
 use physics::WorldState;
 
 const WEBAPP_CANVAS_ID: &str = "target";
@@ -27,8 +29,8 @@ extern "C" {
 
 async fn run(event_loop: EventLoop<()>, window: Window) {
     let mut render_state = Render::new(&window).await;    
-    let mut mouse_state = MouseState::new();
-    let mut world_state = WorldState::new();
+    let mut input_state = InputState::default();
+    let mut world_state = WorldState::new(1);
 
     log("Start event loop");
     let window = &window;
@@ -56,40 +58,46 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                         last_time = instant::Instant::now();
                         window.request_redraw();
 
+                        input_events_to_world(&mut input_state, &mut world_state);
                         world_state.step(dt);
                         let rectangles = world_state.get_rectangles();
                         let collide_points = world_state.get_collide_points();
 
-                        let mut s = String::new();
-                        for r in &rectangles {
+                        //let mut s = String::new();
+                        /*for r in &rectangles {
                             s = format!("{}\n{:?}", s, r);
                         }
                         for cp in &collide_points {
                             s = format!("{}\n{:?}", s, cp);
-                        }
-                        render_state.text = format!("{}\nfps: {:.3}\n{}", mouse_state.to_string(), 1.0 / dt, s);
+                        }*/
+                        render_state.text = format!("{}\nfps: {:.3}\n{}"
+                            ,input_state.mouse.to_string(), 1.0 / dt, world_state.get_scene_name());
 
                         render_state.update_frame(rectangles, collide_points);
                         render_state.render();
                     },
                     WindowEvent::CursorEntered{..} => {
-                        mouse_state.is_cursor_inside = true;
+                        input_state.update_mouse_inside(true);
                     },
                     WindowEvent::CursorLeft { .. } => {
-                        mouse_state.is_cursor_inside = false;
+                        input_state.update_mouse_inside(false);
                     },
                     WindowEvent::MouseInput { state, button, .. } => {
                         if button == MouseButton::Left {
-                            mouse_state.is_left_pressed = state.is_pressed();
+                            input_state.update_mouse_buttons(state.is_pressed());
                         }
                     },
                     WindowEvent::CursorMoved { position, .. } => {
                         let (x, y) = coords_to_render(position.x, position.y, window.inner_size());
-                        mouse_state.set_pos(x, y);
-                        if mouse_state.is_left_pressed {
-                            world_state = WorldState::new();
-                        }
-                    }
+                        input_state.update_mouse_pos(x, y);
+                    },
+                    WindowEvent::KeyboardInput { event: KeyEvent {
+                        state,
+                        physical_key: PhysicalKey::Code(key),
+                        ..
+                    }, .. } => {
+                        input_state.update_keyboard(state.is_pressed(), key);
+                    },
                     WindowEvent::CloseRequested => target.exit(),
                     _ => {}
                 };
@@ -108,6 +116,19 @@ fn _len_to_render(diff_x: f32, diff_y: f32, window_size: winit::dpi::PhysicalSiz
     let xr = diff_x * 2.0 / window_size.width as f32;
     let yr = diff_y * 2.0 / window_size.height as f32;
     return (xr as f32, yr as f32);
+}
+
+fn input_events_to_world(input_state: &mut InputState, world_state: &mut WorldState) {
+    while let Some(event) = input_state.pop_event() {
+        match event {
+            input::Event::Restart => { 
+                let scene = world_state.current_scene;
+                *world_state = WorldState::new(scene); 
+            },
+            input::Event::CreateBox(x, y) => { world_state.add_rectangle(x, y); },
+            input::Event::RunScene(scene) => { *world_state = WorldState::new(scene); }
+        }
+    }
 }
 
 fn create_window<T>(event_loop: &EventLoop<T>) -> Result<Window, OsError> {
