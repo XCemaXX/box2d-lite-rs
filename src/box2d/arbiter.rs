@@ -17,16 +17,6 @@ pub struct Arbiter {
 }
 
 impl Arbiter {
-    pub fn get_collide_points(&self) -> Vec<Vec2> {
-        let mut res = Vec::new();
-        for i in 0..self.num_contacts {
-            res.push(Vec2::new(
-                self.contacts[i].position.x, 
-                self.contacts[i].position.y));
-        }
-        res
-    }
-
     pub fn create_arbiter_contacts(b1: Rc<RefCell<Body>>, b2: Rc<RefCell<Body>>) -> (Self, usize) {
         let (b1, b2) = 
             if b1.borrow().serial_number < b2.borrow().serial_number {
@@ -43,6 +33,16 @@ impl Arbiter {
         let num_contacts = collide(&mut contacts, body1, body2);
         let friction = f32::sqrt(body1.friction * body2.friction);
         (Self{ contacts, num_contacts, body1: b1, body2: b2, friction }, num_contacts)
+    }
+
+    pub fn get_collide_points(&self) -> Vec<Vec2> {
+        let mut res = Vec::new();
+        for i in 0..self.num_contacts {
+            res.push(Vec2::new(
+                self.contacts[i].position.x, 
+                self.contacts[i].position.y));
+        }
+        res
     }
 
     pub fn update(&mut self, other: &Self) {

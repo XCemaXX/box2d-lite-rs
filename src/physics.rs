@@ -2,7 +2,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 use super::box2d::{World, Body, Vec2, UNMOVABLE_MASS};
-use super::primitives::{Rectangle, Point};
+use super::primitives::{Rectangle, Point, Line};
 
 pub struct WorldState {
     world: World,
@@ -116,6 +116,14 @@ impl WorldState {
             .map(|p| { Point { 
                 x: p.x / SCALE_MULT,
                 y: p.y / SCALE_MULT,
+            }}).collect()
+    }
+
+    pub fn get_joint_lines(&self) -> Vec<Line> {
+        self.world.get_joint_lines().iter()
+            .map(|(start, end)| { Line {
+                p1: Point { x: start.x / SCALE_MULT, y: start.y / SCALE_MULT },
+                p2: Point { x: end.x / SCALE_MULT,   y: end.y / SCALE_MULT },
             }}).collect()
     }
 

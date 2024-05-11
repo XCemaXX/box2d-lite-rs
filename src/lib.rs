@@ -62,18 +62,11 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                         world_state.step(dt);
                         let rectangles = world_state.get_rectangles();
                         let collide_points = world_state.get_collide_points();
-
-                        //let mut s = String::new();
-                        /*for r in &rectangles {
-                            s = format!("{}\n{:?}", s, r);
-                        }
-                        for cp in &collide_points {
-                            s = format!("{}\n{:?}", s, cp);
-                        }*/
+                        let joint_lines = world_state.get_joint_lines();
                         render_state.text = format!("{}\nfps: {:.3}\n{}", 
                             input_state.mouse.to_string(), 1.0 / dt, world_state.get_scene_name());
 
-                        render_state.update_frame(rectangles, collide_points);
+                        render_state.update_frame(rectangles, collide_points, joint_lines);
                         render_state.render();
                     },
                     WindowEvent::CursorEntered{..} => {

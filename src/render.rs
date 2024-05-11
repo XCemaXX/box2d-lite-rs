@@ -5,7 +5,7 @@ use wgpu::util::DeviceExt;
 use wgpu_text::{glyph_brush::{ab_glyph::FontRef, Section as TextSection, Text}, BrushBuilder, TextBrush};
 use winit::window::Window;
 
-use super::primitives::{Rectangle, Point};
+use super::primitives::{Rectangle, Point, Line};
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
@@ -26,12 +26,15 @@ impl Vertex {
     }
 }
 
-const GREY_COLOR: wgpu::Color = wgpu::Color{ // GREY
+const GREY_COLOR: wgpu::Color = wgpu::Color {
     r: 0.66, // 167/256
     g: 0.66,
     b: 0.66,
     a: 1.0,
 };
+
+const RED_COLOR: [f32; 3] = [1.0, 0.0, 0.0];
+const BLACK_COLOR: [f32; 3] = [0.0, 0.0, 0.0];
 
 fn color_as_array(color: wgpu::Color) -> [f32; 3] {
     [color.r as f32, color.g as f32, color.b as f32]
@@ -126,21 +129,24 @@ impl<'a> Render<'a> {
         frame.present();
     }
 
-    pub fn update_frame(&mut self, rectangles: Vec<Rectangle>, points: Vec<Point>) {
+    pub fn update_frame(&mut self, rectangles: Vec<Rectangle>, points: Vec<Point>, lines: Vec<Line>) {
         let mut index = 0_u16;
         self.vertices.clear();
         self.indices.clear();
         for r in rectangles {
-            let (vertices, indices) = create_bordered_rectangle(r, index);
+            let (vertices, indices) = create_bordered_rectangle(r, &mut index);
             self.vertices.extend(vertices.iter());
             self.indices.extend(indices.iter());
-            index += 8;
         }
         for p in points {
-            let (vertices, indices) = create_point(p, index);
+            let (vertices, indices) = create_point(p, &mut index);
             self.vertices.extend(vertices.iter());
             self.indices.extend(indices.iter());
-            index += 4;
+        }
+        for l in lines {
+            let (vertices, indices) = create_line(l, &mut index);
+            self.vertices.extend(vertices.iter());
+            self.indices.extend(indices.iter());
         }
         self.update_buffers();
     }
@@ -160,7 +166,7 @@ impl<'a> Render<'a> {
     }
 }
 
-fn create_bordered_rectangle(r: Rectangle, index_start: u16) -> (Vec<Vertex>, Vec<u16>) {
+fn create_bordered_rectangle(r: Rectangle, index_start: &mut u16) -> (Vec<Vertex>, Vec<u16>) {
     let corners = math::get_corners(&r);
     const BORDER_WIDTH: f32 = 0.02;
     let mut r = r;
@@ -181,7 +187,7 @@ fn create_bordered_rectangle(r: Rectangle, index_start: u16) -> (Vec<Vertex>, Ve
         Vertex { position: inner_corners[2], color: color_as_array(GREY_COLOR) },    
         Vertex { position: inner_corners[3], color: color_as_array(GREY_COLOR) },
     ];
-    let i = index_start;
+    let i = *index_start;
     let indices: Vec<u16> = vec![
         //outer square
         i + 0, i + 1, i + 3,    // A, B, D
@@ -190,26 +196,54 @@ fn create_bordered_rectangle(r: Rectangle, index_start: u16) -> (Vec<Vertex>, Ve
         i + 4, i + 5, i + 7,
         i + 7, i + 5, i + 6,
     ];
+    *index_start += 8;
     return (vertices, indices);
 }
 
-fn create_point(p: Point, index_start: u16) -> (Vec<Vertex>, Vec<u16>) {
+fn create_point(p: Point, index_start: &mut u16) -> (Vec<Vertex>, Vec<u16>) {
     let (x, y) = (p.x, p.y);
-    let size = 0.01;
-    let color_red = [1.0, 0.0, 0.0];
+    const SIZE: f32  = 0.01;
+    let color = RED_COLOR;
     let vertices: Vec<Vertex> = vec![
         //outer square
-        Vertex { position: [x, y - size], color: color_red },     // A
-        Vertex { position: [x + size, y - size], color: color_red },    // B
-        Vertex { position: [x + size, y], color: color_red },     // C
-        Vertex { position: [x, y], color: color_red },      // D;
+        Vertex { position: [x, y - SIZE], color: color },     // A
+        Vertex { position: [x + SIZE, y - SIZE], color: color },    // B
+        Vertex { position: [x + SIZE, y], color: color },     // C
+        Vertex { position: [x, y], color: color },      // D;
     ];
-    let i = index_start;
+    let i = *index_start;
     let indices: Vec<u16> = vec![
         //outer square
         i + 0, i + 1, i + 3,    // A, B, D
         i + 3, i + 1, i + 2,    // D, B, C
     ];
+    *index_start += 4;
+    return (vertices, indices);
+}
+
+fn create_line(line: Line, index_start: &mut u16) -> (Vec<Vertex>, Vec<u16>) {
+    const W: f32 = 0.005;
+    let color: [f32; 3] = BLACK_COLOR;
+    let p1 = &line.p1;
+    let p2 = &line.p2;
+
+    let dx = p2.x - p1.x;
+    let dy = p2.y - p1.y;
+    let l = dx.hypot(dy);
+    let u = dx * W * 0.5 / l;
+    let v = dy * W * 0.5 / l;
+    let vertices: Vec<Vertex> = vec![
+        Vertex { position: [p1.x + v,  p1.y - u], color },
+        Vertex { position: [p1.x - v,  p1.y + u], color },
+        Vertex { position: [p2.x - v,  p2.y + u], color },
+        Vertex { position: [p2.x + v,  p2.y - u], color },
+    ];
+    let i = *index_start;
+    let indices: Vec<u16> = vec![
+        i + 2, i + 1, i + 0,
+        i + 2, i + 0, i + 3,
+    ];
+    *index_start += 4;
     return (vertices, indices);
 }
 

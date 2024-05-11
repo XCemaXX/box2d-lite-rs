@@ -1,7 +1,7 @@
 
 use super::math_utils::{Vec2, Mat22, cross_f_v};
 use super::body::Body;
-use super::world::{WARM_STARTING, ACCUMULATE_IMPULSES, POSITION_CORRECTION};
+use super::world::{WARM_STARTING, POSITION_CORRECTION};
 use std::rc::Rc;
 use std::cell::RefCell;
 pub struct Joint {
@@ -46,6 +46,19 @@ impl Joint {
             bias_factor: 0.2,
             softness: 0.0,
         }
+    }
+
+    pub fn get_joint_lines(&self) -> [(Vec2, Vec2); 2] {
+        let b1 = self.body1.borrow();
+        let b2 = self.body2.borrow();
+        let r1 = Mat22::from_angle(b1.rotation);
+        let r2 = Mat22::from_angle(b2.rotation);
+        let x1 = b1.position;
+        let p1 = &x1 + &(&r1 * &self.local_anchor1);
+        let x2 = b2.position;
+        let p2 = &x2 + &(&r2 * &self.local_anchor2);
+
+        [(x1, p1), (x2, p2)]
     }
 
 	pub fn pre_step(&mut self, inv_dt: f32) {

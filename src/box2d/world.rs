@@ -42,6 +42,15 @@ impl World {
         res
     }
 
+    pub fn get_joint_lines(&self) -> Vec<(Vec2, Vec2)> {
+        let mut res = Vec::new();
+        for joint in &self.joints {
+            let joint = joint.borrow();
+            res.extend(joint.get_joint_lines().iter());
+        }
+        res
+    }
+
     pub fn add_body(&mut self, body: Rc<RefCell<Body>>) {
         body.borrow_mut().serial_number = self.bodies.len();
         self.bodies.push(body);
@@ -113,7 +122,7 @@ impl World {
         } 
     }
 
-    pub fn broad_phase(&mut self) {
+    fn broad_phase(&mut self) {
         // O(n^2) broad-phase
         for i in 0..self.bodies.len() {
             let bi = self.bodies[i].borrow();
