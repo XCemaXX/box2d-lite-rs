@@ -1,6 +1,7 @@
 use super::math_utils::Vec2;
 use super::body::Body;
 use super::arbiter::Arbiter;
+use super::joint::Joint;
 
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -8,6 +9,7 @@ use std::collections::BTreeMap;
 
 pub struct World {
     bodies: Vec<Rc<RefCell<Body>>>,
+    joints: Vec<Rc<RefCell<Joint>>>,
     arbiters: BTreeMap<(usize, usize), Arbiter>,
     gravity: Vec2,
     iterations: i32,
@@ -21,10 +23,15 @@ impl World {
     pub fn new(gravity: Vec2, iterations: i32) -> Self {
         Self {
             bodies: Vec::new(),
+            joints: Vec::new(),
             arbiters: BTreeMap::new(),
             gravity,
             iterations,
         }
+    }
+
+    pub fn get_bodies<'a>(&'a self) -> &'a Vec<Rc<RefCell<Body>>> {
+        return &self.bodies;
     }
 
     pub fn get_collide_points(&self) -> Vec<Vec2> {
@@ -40,8 +47,16 @@ impl World {
         self.bodies.push(body);
     }
 
+    pub fn add_joint(&mut self, body1: Rc<RefCell<Body>>, body2: Rc<RefCell<Body>>, anchor: &Vec2) {
+        let joint = Rc::new(RefCell::new(
+            Joint::new(body1, body2, anchor)
+        ));
+        self.joints.push(joint)
+    }
+
     pub fn clear(&mut self) {
         self.bodies.clear();
+        self.joints.clear();
     }
 
     pub fn step(&mut self, dt: f32) {
@@ -67,21 +82,21 @@ impl World {
         for (_, arb) in &mut self.arbiters {
             arb.pre_step(inv_dt);
         }
-        // todo
-        /*for (int i = 0; i < (int)joints.size(); ++i) {
-            joints[i]->PreStep(inv_dt);	
-        }*/
+
+        for joint in &mut self.joints {
+            let mut joint = joint.borrow_mut();
+            joint.pre_step(inv_dt);
+        }
 
         // Perform iterations
         for _ in 0..self.iterations {
             for (_, arb) in &mut self.arbiters {
                 arb.apply_impulse();
             }
-            // todo
-            /*for (int j = 0; j < (int)joints.size(); ++j)
-            {
-                joints[j]->ApplyImpulse();
-            }*/
+            for joint in &mut self.joints {
+                let mut joint = joint.borrow_mut();
+                joint.apply_impulse();
+            }
         }
         
         // Integrate Velocities

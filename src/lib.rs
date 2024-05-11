@@ -70,8 +70,8 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                         for cp in &collide_points {
                             s = format!("{}\n{:?}", s, cp);
                         }*/
-                        render_state.text = format!("{}\nfps: {:.3}\n{}"
-                            ,input_state.mouse.to_string(), 1.0 / dt, world_state.get_scene_name());
+                        render_state.text = format!("{}\nfps: {:.3}\n{}", 
+                            input_state.mouse.to_string(), 1.0 / dt, world_state.get_scene_name());
 
                         render_state.update_frame(rectangles, collide_points);
                         render_state.render();
@@ -121,10 +121,7 @@ fn _len_to_render(diff_x: f32, diff_y: f32, window_size: winit::dpi::PhysicalSiz
 fn input_events_to_world(input_state: &mut InputState, world_state: &mut WorldState) {
     while let Some(event) = input_state.pop_event() {
         match event {
-            input::Event::Restart => { 
-                let scene = world_state.current_scene;
-                *world_state = WorldState::new(scene); 
-            },
+            input::Event::Restart => { world_state.restart_world(); },
             input::Event::CreateBox(x, y) => { world_state.add_rectangle(x, y); },
             input::Event::RunScene(scene) => { *world_state = WorldState::new(scene); }
         }

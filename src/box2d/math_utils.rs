@@ -1,14 +1,8 @@
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Default)]
 pub struct Vec2 {
     pub x: f32,
     pub y: f32,
-}
-
-impl Default for Vec2 {
-    fn default() -> Self {
-        Self { x: 0.0, y: 0.0 }
-    }
 }
 
 impl Vec2 {
@@ -93,6 +87,7 @@ impl std::ops::Mul<&Vec2> for f32 {
 }
 
 // #################mat22
+#[derive(Default)]
 pub struct Mat22 {
     pub col1: Vec2,
     pub col2: Vec2,
@@ -125,12 +120,30 @@ impl Mat22 {
             self.col2.abs()
         )
     }
+
+    pub fn invert(&self) -> Self {
+		let (a, b, c ,d) = (self.col1.x, self.col2.x, self.col1.y, self.col2.y);
+		let mut bmat = Mat22::default();
+		let det = a * d - b * c;
+		let det = 1.0 / det;
+
+		(bmat.col1.x, bmat.col2.x) = ( det * d, -det * b);
+		(bmat.col1.y, bmat.col2.y) = (-det * c,  det * a);
+		bmat
+	}
 }
 
 impl std::ops::Mul for &Mat22 {
     type Output = Mat22;
     fn mul(self, other: Self) -> Self::Output {
         Mat22::new(self * &other.col1, self * &other.col2)
+    }
+}
+
+impl std::ops::Add for &Mat22 {
+    type Output = Mat22;
+    fn add(self, other: Self) -> Self::Output {
+        Mat22::new(&self.col1 + &other.col1, &self.col2 + &other.col2)
     }
 }
 

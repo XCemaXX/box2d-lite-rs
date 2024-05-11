@@ -4,6 +4,7 @@ mod body;
 mod contact;
 mod collide;
 mod arbiter;
+mod joint;
 
 pub use world::World;
 pub use body::{Body, UNMOVABLE_MASS};

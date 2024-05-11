@@ -8,7 +8,7 @@ pub enum Event {
 
 pub struct InputState {
     pub mouse: MouseState,
-    pub keyboard: KeyBoardState,
+    keyboard: KeyBoardState,
     events: Vec<Event>,
 }
 
@@ -99,6 +99,7 @@ impl KeyBoardState {
             KeyCode::Space => { &mut self.space_pressed },
             KeyCode::Digit1 => { self.digit_num = 1; &mut self.digit_pressed },
             KeyCode::Digit2 => { self.digit_num = 2; &mut self.digit_pressed },
+            KeyCode::Digit3 => { self.digit_num = 3; &mut self.digit_pressed },
             _ => { return; }
         };
         *k = pressed;
