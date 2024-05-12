@@ -61,7 +61,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                         let collide_points = physics_state.get_collide_points();
                         let joint_lines = physics_state.get_joint_lines();
                         render_state.text = format!("{}\nfps: {:.3}\n{}", 
-                            input_state, 1.0 / dt, physics_state.get_scene_name());
+                            input_state, 1.0 / dt, physics_state);
 
                         render_state.update_frame(rectangles, collide_points, joint_lines);
                         render_state.render();

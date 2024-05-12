@@ -34,6 +34,10 @@ impl World {
         return &self.bodies;
     }
 
+    pub fn bodies_size(&self) -> usize {
+        self.bodies.len()
+    }
+
     pub fn get_collide_points(&self) -> Vec<Vec2> {
         let mut res = Vec::new();
         for (_, arb) in &self.arbiters {

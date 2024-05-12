@@ -1,5 +1,3 @@
-use std::path::Display;
-
 use winit::keyboard::KeyCode;
 
 pub enum Event {

@@ -79,13 +79,17 @@ impl PhysicsState {
         self.add_body(0.15, 0.15, 500.0, x, y);
     }
 
-    pub fn get_scene_name(&self) -> String {
-        format!("Scene {}: {}", self.current_scene + 1, demo_scenes::get_scene_name(self.current_scene))
-    }
-
     pub fn restart(&mut self) {
         let scene = self.current_scene;
         *self = PhysicsState::new(scene); 
     }
 }
 
+impl std::fmt::Display for PhysicsState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Scene {}: {}. Bodies: {}", 
+            self.current_scene + 1, 
+            demo_scenes::get_scene_name(self.current_scene), 
+            self.world.bodies_size())
+    }
+}

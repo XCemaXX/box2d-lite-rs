@@ -171,15 +171,15 @@ pub fn collide(contacts: &mut [Contact; MAX_CONTACT_POINT], body_a: &Body, body_
 
 	if face_b.y > RELATIVE_TOL * separation + ABSOLUTE_TOL * h_b.y {
 		axis = Axis::FaceBY;
-		separation = face_b.y; // unused
+		//separation = face_b.y; // unused
 		normal = if db.y > 0.0 { rot_b.col2 } else { -&rot_b.col2 };
 	}
 
     // Setup clipping plane data based on the separating axis
-    let (mut front_normal, mut side_normal) = (Vec2::default(), Vec2::default());
+    let (front_normal, side_normal);
     let mut incident_edge: [ClipVertex; MAX_CONTACT_POINT] = Default::default();
-    let (mut front, mut neg_side, mut pos_side) = (0_f32, 0_f32, 0_f32);
-    let (mut neg_edge, mut pos_edge) = (EdgeNumbers::default(), EdgeNumbers::default());
+    let (front, neg_side, pos_side);
+    let (neg_edge, pos_edge);
 
     // Compute the clipping lines and the line segment to be clipped.
     match axis {
