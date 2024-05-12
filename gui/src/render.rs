@@ -5,7 +5,7 @@ use wgpu::util::DeviceExt;
 use wgpu_text::{glyph_brush::{ab_glyph::FontRef, Section as TextSection, Text}, BrushBuilder, TextBrush};
 use winit::window::Window;
 
-use super::primitives::{Rectangle, Point, Line};
+use crate::primitives::{Rectangle, Point, Line};
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
@@ -329,6 +329,7 @@ pub fn setup_render(device: &wgpu::Device, _surface: &wgpu::Surface<'_>,
             module: &shader,
             entry_point: "vs_main",
             buffers: &[Vertex::desc()],
+            compilation_options: Default::default(),
         },
         fragment: Some(wgpu::FragmentState {
             module: &shader,
@@ -341,6 +342,7 @@ pub fn setup_render(device: &wgpu::Device, _surface: &wgpu::Surface<'_>,
                 }),
                 write_mask: wgpu::ColorWrites::ALL,
             })],
+            compilation_options: Default::default(),
         }),
         primitive: wgpu::PrimitiveState {
             topology: wgpu::PrimitiveTopology::TriangleList,

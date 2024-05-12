@@ -1,4 +1,4 @@
-use super::math_utils::{Vec2, cross_v_v};
+use crate::math_utils::{Vec2, cross_v_v};
 
 pub const UNMOVABLE_MASS: f32 = f32::MAX;
 

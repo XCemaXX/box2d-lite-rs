@@ -1,7 +1,7 @@
 
-use super::math_utils::{Vec2, Mat22, cross_f_v};
-use super::body::Body;
-use super::world::{WARM_STARTING, POSITION_CORRECTION};
+use crate::math_utils::{Vec2, Mat22, cross_f_v};
+use crate::body::Body;
+use crate::world::{WARM_STARTING, POSITION_CORRECTION};
 use std::rc::Rc;
 use std::cell::RefCell;
 pub struct Joint {

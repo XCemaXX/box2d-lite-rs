@@ -1,7 +1,6 @@
 mod utils;
 mod render;
 mod input;
-mod box2d;
 mod primitives;
 mod physics;
 
@@ -16,7 +15,7 @@ use winit::keyboard::PhysicalKey;
 
 use render::Render;
 use input::InputState;
-use physics::WorldState;
+use physics::PhysicsState;
 
 const WEBAPP_CANVAS_ID: &str = "target";
 
@@ -30,7 +29,7 @@ extern "C" {
 async fn run(event_loop: EventLoop<()>, window: Window) {
     let mut render_state = Render::new(&window).await;    
     let mut input_state = InputState::default();
-    let mut world_state = WorldState::new(1);
+    let mut physics_state = PhysicsState::new(0);
 
     log("Start event loop");
     let window = &window;
@@ -50,21 +49,19 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                         //config.width = 500; // new_size.width.max(1);
                         //config.height = 500; // new_size.height.max(1);
                         //surface.configure(&device, &config);
-                        // On macos the window needs to be redrawn manually after resizing
-                        //window.request_redraw();
                     }
                     WindowEvent::RedrawRequested => {
                         let dt = last_time.elapsed().as_secs_f32();
                         last_time = instant::Instant::now();
                         window.request_redraw();
 
-                        input_events_to_world(&mut input_state, &mut world_state);
-                        world_state.step(dt);
-                        let rectangles = world_state.get_rectangles();
-                        let collide_points = world_state.get_collide_points();
-                        let joint_lines = world_state.get_joint_lines();
+                        input_events_to_physics(&mut input_state, &mut physics_state);
+                        physics_state.step(dt);
+                        let rectangles = physics_state.get_rectangles();
+                        let collide_points = physics_state.get_collide_points();
+                        let joint_lines = physics_state.get_joint_lines();
                         render_state.text = format!("{}\nfps: {:.3}\n{}", 
-                            input_state.mouse.to_string(), 1.0 / dt, world_state.get_scene_name());
+                            input_state, 1.0 / dt, physics_state.get_scene_name());
 
                         render_state.update_frame(rectangles, collide_points, joint_lines);
                         render_state.render();
@@ -111,12 +108,12 @@ fn _len_to_render(diff_x: f32, diff_y: f32, window_size: winit::dpi::PhysicalSiz
     return (xr as f32, yr as f32);
 }
 
-fn input_events_to_world(input_state: &mut InputState, world_state: &mut WorldState) {
+fn input_events_to_physics(input_state: &mut InputState, physics_state: &mut PhysicsState) {
     while let Some(event) = input_state.pop_event() {
         match event {
-            input::Event::Restart => { world_state.restart_world(); },
-            input::Event::CreateBox(x, y) => { world_state.add_rectangle(x, y); },
-            input::Event::RunScene(scene) => { *world_state = WorldState::new(scene); }
+            input::Event::Restart => { physics_state.restart(); },
+            input::Event::CreateBox(x, y) => { physics_state.add_rectangle(x, y); },
+            input::Event::RunScene(scene) => { *physics_state = PhysicsState::new(scene); }
         }
     }
 }
@@ -132,7 +129,7 @@ fn create_window<T>(event_loop: &EventLoop<T>) -> Result<Window, OsError> {
 
 #[wasm_bindgen(start)]
 pub fn start() {
-    //alert("Hello, hello-wasm!");
+    //alert("Hello, gui!");
     std::panic::set_hook(Box::new(console_error_panic_hook::hook));
     console_log::init().expect("could not initialize logger");
 

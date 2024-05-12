@@ -1,7 +1,7 @@
 
-use super::body::Body;
-use super::contact::{Contact, MAX_CONTACT_POINT, Feature, EdgeNumbers};
-use super::math_utils::{Vec2, dot, Mat22};
+use crate::body::Body;
+use crate::contact::{Contact, MAX_CONTACT_POINT, Feature, EdgeNumbers};
+use crate::math_utils::{Vec2, dot, Mat22};
 
 #[derive(PartialEq)]
 enum Axis {

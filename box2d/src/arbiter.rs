@@ -1,9 +1,9 @@
 
-use super::body::Body;
-use super::contact::{Contact, MAX_CONTACT_POINT};
-use super::collide::collide;
-use super::world::{WARM_STARTING, ACCUMULATE_IMPULSES, POSITION_CORRECTION};
-use super::math_utils::{dot, cross_v_f, cross_f_v, clamp, Vec2};
+use crate::body::Body;
+use crate::contact::{Contact, MAX_CONTACT_POINT};
+use crate::collide::collide;
+use crate::world::{WARM_STARTING, ACCUMULATE_IMPULSES, POSITION_CORRECTION};
+use crate::math_utils::{dot, cross_v_f, cross_f_v, clamp, Vec2};
 use std::rc::Rc;
 use std::cell::RefCell;
 

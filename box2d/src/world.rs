@@ -1,7 +1,7 @@
-use super::math_utils::Vec2;
-use super::body::Body;
-use super::arbiter::Arbiter;
-use super::joint::Joint;
+use crate::math_utils::Vec2;
+use crate::body::Body;
+use crate::arbiter::Arbiter;
+use crate::joint::Joint;
 
 use std::rc::Rc;
 use std::cell::RefCell;

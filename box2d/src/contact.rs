@@ -1,4 +1,4 @@
-use super::math_utils::Vec2;
+use crate::math_utils::Vec2;
 
 // Box vertex and edge numbering:
 //

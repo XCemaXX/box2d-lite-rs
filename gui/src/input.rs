@@ -1,3 +1,5 @@
+use std::path::Display;
+
 use winit::keyboard::KeyCode;
 
 pub enum Event {
@@ -7,7 +9,7 @@ pub enum Event {
 }
 
 pub struct InputState {
-    pub mouse: MouseState,
+    mouse: MouseState,
     keyboard: KeyBoardState,
     events: Vec<Event>,
 }
@@ -53,6 +55,13 @@ impl InputState {
     }
 }
 
+impl std::fmt::Display for InputState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Mouse: {:.3} {:.3}", 
+            self.mouse.x, self.mouse.y)
+    }
+}
+
 pub struct MouseState {
     is_cursor_inside: bool,
     left_button_pressed: bool,
@@ -76,10 +85,6 @@ impl MouseState {
         self.left_button_pressed = pressed;
     }
 
-    pub fn to_string(&self) -> String {
-        format!("{:?}. Pos: {:.3} {:.3}", self.left_button_pressed, self.x, self.y)
-    }
-
     fn set_pos(&mut self, x: f32, y: f32) {
         self.x = x;
         self.y = y;
@@ -95,12 +100,19 @@ pub struct KeyBoardState {
 
 impl KeyBoardState {
     fn update(&mut self, pressed: bool, key: KeyCode) {
+        const DIGIT_START: usize = KeyCode::Digit1 as usize;
+        const DIGIT_END: usize = KeyCode::Digit3 as usize;
+
         let k = match key {
             KeyCode::Space => { &mut self.space_pressed },
-            KeyCode::Digit1 => { self.digit_num = 1; &mut self.digit_pressed },
-            KeyCode::Digit2 => { self.digit_num = 2; &mut self.digit_pressed },
-            KeyCode::Digit3 => { self.digit_num = 3; &mut self.digit_pressed },
-            _ => { return; }
+            digit => {
+                match digit as usize {
+                    DIGIT_START..=DIGIT_END => { 
+                        self.digit_num = digit as usize - DIGIT_START; 
+                        &mut self.digit_pressed },
+                    _ => { return; },
+                }
+            },
         };
         *k = pressed;
     }
