@@ -99,7 +99,7 @@ pub struct KeyBoardState {
 impl KeyBoardState {
     fn update(&mut self, pressed: bool, key: KeyCode) {
         const DIGIT_START: usize = KeyCode::Digit1 as usize;
-        const DIGIT_END: usize = KeyCode::Digit3 as usize;
+        const DIGIT_END: usize = KeyCode::Digit9 as usize;
 
         let k = match key {
             KeyCode::Space => { &mut self.space_pressed },

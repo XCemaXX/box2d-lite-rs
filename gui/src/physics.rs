@@ -12,7 +12,7 @@ pub struct PhysicsState {
 }
 
 const SCALE_MULT: f32 = 100.0;
-const GRAVITY: f32 = -300.0;
+const GRAVITY: f32 = -400.0;
 
 impl PhysicsState {
     fn add_unmovable_body(&mut self, w: f32, h: f32, pos_x: f32, pos_y: f32) -> Rc<RefCell<Body>> {
