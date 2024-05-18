@@ -25,17 +25,13 @@ impl Default for InputState {
 impl InputState {
     pub fn update_mouse_buttons(&mut self, pressed: bool) {
         self.mouse.update_buttons(pressed);
-        if self.mouse.left_button_pressed && self.mouse.is_cursor_inside {
+        if self.mouse.left_button_pressed {
             self.events.push(Event::CreateBox(self.mouse.x, self.mouse.y));
         }
     }
 
     pub fn update_mouse_pos(&mut self, x: f32, y: f32) {
         self.mouse.set_pos(x, y);
-    }
-
-    pub fn update_mouse_inside(&mut self, is_inside: bool) {
-        self.mouse.is_cursor_inside = is_inside;
     }
 
     pub fn update_keyboard(&mut self, pressed: bool, key: KeyCode) {
@@ -61,7 +57,6 @@ impl std::fmt::Display for InputState {
 }
 
 pub struct MouseState {
-    is_cursor_inside: bool,
     left_button_pressed: bool,
     x: f32,
     y: f32,
@@ -70,7 +65,6 @@ pub struct MouseState {
 impl Default for MouseState {
     fn default() -> Self {
         Self {
-            is_cursor_inside: false,
             left_button_pressed: false,
             x: 0.0,
             y: 0.0,

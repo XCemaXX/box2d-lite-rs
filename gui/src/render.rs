@@ -44,8 +44,8 @@ pub struct Render<'a> {
     surface: wgpu::Surface<'a>,
     device: wgpu::Device,
     queue: wgpu::Queue,
-    _config: wgpu::SurfaceConfiguration,
-    _size: winit::dpi::PhysicalSize<u32>,
+    config: wgpu::SurfaceConfiguration,
+    size: winit::dpi::PhysicalSize<u32>,
     render_pipeline: wgpu::RenderPipeline,
 
     vertices: Vec<Vertex>,
@@ -75,8 +75,8 @@ impl<'a> Render<'a> {
             surface,
             device,
             queue,
-            _config: config,
-            _size: size,
+            config,
+            size,
             render_pipeline,
             vertices,
             indices,
@@ -163,6 +163,16 @@ impl<'a> Render<'a> {
                 usage: wgpu::BufferUsages::INDEX,
             }
         );
+    }
+
+    pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+        self.size.width = new_size.width.max(600);
+        self.size.height = new_size.height.max(600);
+        self.config.width = self.size.width;
+        self.config.height = self.size.height;
+        // doesn't work. infinite resize
+        //self.surface.configure(&self.device, &self.config);
+        //self.text_brush.resize_view(self.size.width as f32, self.size.height as f32, &self.queue);
     }
 }
 

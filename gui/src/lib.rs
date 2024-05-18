@@ -6,7 +6,7 @@ mod physics;
 
 use wasm_bindgen::prelude::*;
 use winit::{
-    event::{Event, WindowEvent, MouseButton, KeyEvent}, 
+    event::{Event, WindowEvent, MouseButton, KeyEvent, TouchPhase}, 
     event_loop::EventLoop, window::{Window, WindowBuilder}
 };
 use wgpu::web_sys;
@@ -31,6 +31,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
     let mut input_state = InputState::default();
     let mut physics_state = PhysicsState::new(0);
 
+    window.set_visible(true);
     log("Start event loop");
     let window = &window;
     let mut last_time = instant::Instant::now();
@@ -43,13 +44,9 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
             } = event
             {
                 match event {
-                    WindowEvent::Resized(_new_size) => {
-                        //text_brush.resize_view(config.width as f32, config.height as f32, &queue);
-                        // Reconfigure the surface with the new size
-                        //config.width = 500; // new_size.width.max(1);
-                        //config.height = 500; // new_size.height.max(1);
-                        //surface.configure(&device, &config);
-                    }
+                    WindowEvent::Resized(new_size) => {
+                        render_state.resize(new_size);
+                    },
                     WindowEvent::RedrawRequested => {
                         let dt = last_time.elapsed().as_secs_f32();
                         last_time = instant::Instant::now();
@@ -60,18 +57,19 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                         let rectangles = physics_state.get_rectangles();
                         let collide_points = physics_state.get_collide_points();
                         let joint_lines = physics_state.get_joint_lines();
+
+                        if cfg!(debug_assertions) {
                         render_state.text = format!("{}\nfps: {:.3}\n{}\n{}", 
                             input_state, 1.0 / dt, physics_state,
                             "Controls: 1-9 scenes; Space: restart; Click - add box");
-
+                        } else {
+                            render_state.text = format!("fps: {:.3}\n{}\n{}", 
+                            1.0 / dt, physics_state,
+                            "Controls: 1-9 scenes; Space: restart; Click - add box");
+                        }
+                        
                         render_state.update_frame(rectangles, collide_points, joint_lines);
                         render_state.render();
-                    },
-                    WindowEvent::CursorEntered{..} => {
-                        input_state.update_mouse_inside(true);
-                    },
-                    WindowEvent::CursorLeft { .. } => {
-                        input_state.update_mouse_inside(false);
                     },
                     WindowEvent::MouseInput { state, button, .. } => {
                         if button == MouseButton::Left {
@@ -79,8 +77,17 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                         }
                     },
                     WindowEvent::CursorMoved { position, .. } => {
-                        let (x, y) = coords_to_render(position.x, position.y, window.inner_size());
+                        let (x, y) = mouse_coords_to_render(position.x, position.y, window.inner_size());
                         input_state.update_mouse_pos(x, y);
+                    },
+                    WindowEvent::Touch(t) => {
+                        let (x, y) = touch_coords_to_render(t.location.x, t.location.y, window);
+                        input_state.update_mouse_pos(x, y);
+                        match t.phase {
+                            TouchPhase::Started => { input_state.update_mouse_buttons(true); },
+                            TouchPhase::Ended => { input_state.update_mouse_buttons(false); },
+                            _ => {},
+                        };
                     },
                     WindowEvent::KeyboardInput { event: KeyEvent {
                         state,
@@ -90,16 +97,38 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                         input_state.update_keyboard(state.is_pressed(), key);
                     },
                     WindowEvent::CloseRequested => target.exit(),
-                    _ => {}
+                    _ => {},
                 };
             }
         })
         .unwrap();
 }
 
-fn coords_to_render(x: f64, y: f64, window_size: winit::dpi::PhysicalSize<u32>) -> (f32, f32) {
+fn touch_coords_to_render(x: f64, y: f64, window: &Window) -> (f32, f32) {
+    // work around
+    // check this https://github.com/mvlabat/bevy_egui/issues/104
+    // should be fixed https://github.com/rust-windowing/winit/pull/2188
+    // but doesn't work
+    let s = window.scale_factor();
+    if let Some(o) = web_sys::window()
+        .and_then(|window| window.document())
+        .and_then(|document| document.get_element_by_id(WEBAPP_CANVAS_ID))
+        .map(|element| element.get_bounding_client_rect())
+        .map(|rect| (rect.width(), rect.height())) {
+            let x_normalized = (x / s) / o.0;
+            let y_normalized = (y / s) / o.0;
+            
+            ((x_normalized * 2.0 - 1.0) as f32, 
+            -(y_normalized * 2.0 - 1.0) as f32)
+        }
+    else {
+        mouse_coords_to_render(x, y, window.inner_size())
+    }
+}
+
+fn mouse_coords_to_render(x: f64, y: f64, window_size: winit::dpi::PhysicalSize<u32>) -> (f32, f32) {
     let xr = (x * 2.0 / window_size.width as f64) - 1.0;
-    let yr = ((window_size.height as f64 - y) * 2.0 /window_size.height as f64) - 1.0;
+    let yr = ((window_size.height as f64 - y) * 2.0 / window_size.height as f64) - 1.0;
     return (xr as f32, yr as f32);
 }
 
