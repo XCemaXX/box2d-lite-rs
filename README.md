@@ -14,13 +14,13 @@ Big thanks to the author Erin Catto.
 
 # Helpful resources
 ## Wgpu
-https://github.com/vhiribarren/wgpu-sandbox/tree/main
-https://github.com/gfx-rs/wgpu/tree/trunk/examples/src/hello_triangle
-https://github.com/Blatko1/wgpu-text/tree/master
-https://github.com/sotrh/learn-wgpu/tree/master/code/showcase/pong/src
-https://github.com/jack1232/WebGPU-Step-By-Step
+https://github.com/vhiribarren/wgpu-sandbox/tree/main  
+https://github.com/gfx-rs/wgpu/tree/trunk/examples/src/hello_triangle  
+https://github.com/Blatko1/wgpu-text/tree/master  
+https://github.com/sotrh/learn-wgpu/tree/master/code/showcase/pong/src  
+https://github.com/jack1232/WebGPU-Step-By-Step  
 
 ## Wasm
-https://blog.logrocket.com/getting-started-with-webassembly-and-rust/
-https://github.com/rustwasm/wasm-bindgen
-https://rustwasm.github.io/docs/book/game-of-life/hello-world.html
+https://blog.logrocket.com/getting-started-with-webassembly-and-rust/  
+https://github.com/rustwasm/wasm-bindgen  
+https://rustwasm.github.io/docs/book/game-of-life/hello-world.html  

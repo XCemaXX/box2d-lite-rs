@@ -1,0 +1,17 @@
+{
+  "name": "wgpu-gui",
+  "collaborators": [
+    "XCemaXX <xcemaxx@gmail.com>"
+  ],
+  "version": "0.1.0",
+  "files": [
+    "wgpu_gui_bg.wasm",
+    "wgpu_gui.js",
+    "wgpu_gui.d.ts"
+  ],
+  "module": "wgpu_gui.js",
+  "types": "wgpu_gui.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
