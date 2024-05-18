@@ -14,8 +14,8 @@ pub struct Joint {
     p: Vec2, // accumulated impulse
     body1: Rc<RefCell<Body>>,
     body2: Rc<RefCell<Body>>,
-    bias_factor: f32,
-    softness: f32,
+    pub bias_factor: f32,
+    pub softness: f32,
 }
 
 impl Joint {

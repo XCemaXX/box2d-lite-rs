@@ -3,7 +3,7 @@ mod demo_scenes;
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use box2d::{World, Body, Vec2, UNMOVABLE_MASS};
+use box2d::{World, Body, Joint, Vec2, UNMOVABLE_MASS};
 use crate::primitives::{Rectangle, Point, Line};
 
 pub struct PhysicsState {
@@ -12,7 +12,7 @@ pub struct PhysicsState {
 }
 
 const SCALE_MULT: f32 = 100.0;
-const GRAVITY: f32 = -400.0;
+const GRAVITY: f32 = -500.0;
 
 impl PhysicsState {
     fn add_unmovable_body(&mut self, w: f32, h: f32, pos_x: f32, pos_y: f32) -> Rc<RefCell<Body>> {
@@ -27,8 +27,9 @@ impl PhysicsState {
         body
     }
 
-    fn add_joint(&mut self, body1: Rc<RefCell<Body>>, body2: Rc<RefCell<Body>>, anchor_x: f32, anchor_y: f32) {
-        self.world.add_joint(body1, body2, &Vec2::new(anchor_x * SCALE_MULT, anchor_y * SCALE_MULT));
+    fn add_joint(&mut self, body1: Rc<RefCell<Body>>, body2: Rc<RefCell<Body>>, anchor_x: f32, anchor_y: f32) -> Rc<RefCell<Joint>> {
+        let joint = self.world.add_joint(body1, body2, &Vec2::new(anchor_x * SCALE_MULT, anchor_y * SCALE_MULT));
+        joint
     }
 
     pub fn new(demo_scene: usize) -> Self {
@@ -76,7 +77,7 @@ impl PhysicsState {
     }
 
     pub fn add_rectangle(&mut self, x: f32, y: f32) {
-        self.add_body(0.15, 0.15, 500.0, x, y);
+        self.add_body(0.15, 0.15, 200.0, x, y);
     }
 
     pub fn restart(&mut self) {

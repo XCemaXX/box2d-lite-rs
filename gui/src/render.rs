@@ -168,7 +168,7 @@ impl<'a> Render<'a> {
 
 fn create_bordered_rectangle(r: Rectangle, index_start: &mut u16) -> (Vec<Vertex>, Vec<u16>) {
     let corners = math::get_corners(&r);
-    const BORDER_WIDTH: f32 = 0.02;
+    const BORDER_WIDTH: f32 = 0.015;
     let mut r = r;
     r.width -= BORDER_WIDTH;
     r.height -= BORDER_WIDTH;
@@ -176,10 +176,10 @@ fn create_bordered_rectangle(r: Rectangle, index_start: &mut u16) -> (Vec<Vertex
 
     let vertices: Vec<Vertex> = vec![
         //outer square
-        Vertex { position: corners[0], color: [1.0, 0.0, 0.0] },     // A
-        Vertex { position: corners[1], color: [0.0, 1.0, 0.0] },    // B
+        Vertex { position: corners[0], color: [0.5, 0.0, 1.0] },     // A
+        Vertex { position: corners[1], color: [0.9, 1.0, 0.0] },    // B
         Vertex { position: corners[2], color: [0.0, 0.0, 1.0] },     // C
-        Vertex { position: corners[3], color: [1.0, 1.0, 0.0] },      // D;
+        Vertex { position: corners[3], color: [0.0, 0.9, 0.3] },      // D;
 
         //inner square
         Vertex { position: inner_corners[0], color: color_as_array(GREY_COLOR) },     

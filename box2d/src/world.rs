@@ -60,11 +60,12 @@ impl World {
         self.bodies.push(body);
     }
 
-    pub fn add_joint(&mut self, body1: Rc<RefCell<Body>>, body2: Rc<RefCell<Body>>, anchor: &Vec2) {
+    pub fn add_joint(&mut self, body1: Rc<RefCell<Body>>, body2: Rc<RefCell<Body>>, anchor: &Vec2) -> Rc<RefCell<Joint>> {
         let joint = Rc::new(RefCell::new(
             Joint::new(body1, body2, anchor)
         ));
-        self.joints.push(joint)
+        self.joints.push(joint.clone());
+        joint
     }
 
     pub fn clear(&mut self) {
