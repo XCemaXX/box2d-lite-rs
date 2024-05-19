@@ -3,6 +3,7 @@ mod render;
 mod input;
 mod primitives;
 mod physics;
+mod buttons;
 
 use wasm_bindgen::prelude::*;
 use winit::{
@@ -58,14 +59,17 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                         let collide_points = physics_state.get_collide_points();
                         let joint_lines = physics_state.get_joint_lines();
 
+                        let controls_text = 
+"Controls: 1-9 scenes; Space: restart; P, N - prev, next scene;
+               Click - add box";
                         if cfg!(debug_assertions) {
                         render_state.text = format!("{}\nfps: {:.3}\n{}\n{}", 
                             input_state, 1.0 / dt, physics_state,
-                            "Controls: 1-9 scenes; Space: restart; Click - add box");
+                            controls_text);
                         } else {
                             render_state.text = format!("fps: {:.3}\n{}\n{}", 
                             1.0 / dt, physics_state,
-                            "Controls: 1-9 scenes; Space: restart; Click - add box");
+                            controls_text);
                         }
                         
                         render_state.update_frame(rectangles, collide_points, joint_lines);
@@ -73,19 +77,19 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                     },
                     WindowEvent::MouseInput { state, button, .. } => {
                         if button == MouseButton::Left {
-                            input_state.update_mouse_buttons(state.is_pressed());
+                            input_state.update_cursor_buttons(state.is_pressed());
                         }
                     },
                     WindowEvent::CursorMoved { position, .. } => {
                         let (x, y) = mouse_coords_to_render(position.x, position.y, window.inner_size());
-                        input_state.update_mouse_pos(x, y);
+                        input_state.update_cursor_pos(x, y);
                     },
                     WindowEvent::Touch(t) => {
                         let (x, y) = touch_coords_to_render(t.location.x, t.location.y, window);
-                        input_state.update_mouse_pos(x, y);
+                        input_state.update_cursor_pos(x, y);
                         match t.phase {
-                            TouchPhase::Started => { input_state.update_mouse_buttons(true); },
-                            TouchPhase::Ended => { input_state.update_mouse_buttons(false); },
+                            TouchPhase::Started => { input_state.update_cursor_buttons(true); },
+                            TouchPhase::Ended => { input_state.update_cursor_buttons(false); },
                             _ => {},
                         };
                     },
@@ -139,11 +143,14 @@ fn _len_to_render(diff_x: f32, diff_y: f32, window_size: winit::dpi::PhysicalSiz
 }
 
 fn input_events_to_physics(input_state: &mut InputState, physics_state: &mut PhysicsState) {
+    use input::Event::*;
     while let Some(event) = input_state.pop_event() {
         match event {
-            input::Event::Restart => { physics_state.restart(); },
-            input::Event::CreateBox(x, y) => { physics_state.add_rectangle(x, y); },
-            input::Event::RunScene(scene) => { *physics_state = PhysicsState::new(scene); }
+            Restart => { physics_state.restart(); },
+            CreateBox(x, y) => { physics_state.add_rectangle(x, y); },
+            RunScene(scene) => { *physics_state = PhysicsState::new(scene); },
+            ChangeToNextScene => { physics_state.change_to_next_scene(); },
+            ChangeToPrevScene => { physics_state.change_to_prev_scene(); },
         }
     }
 }

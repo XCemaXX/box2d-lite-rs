@@ -84,6 +84,16 @@ impl PhysicsState {
         let scene = self.current_scene;
         *self = PhysicsState::new(scene); 
     }
+
+    pub fn change_to_next_scene(&mut self) {
+        let scene = (self.current_scene + 1) % demo_scenes::get_scene_amount();
+        *self = PhysicsState::new(scene);   
+    }
+
+    pub fn change_to_prev_scene(&mut self) {
+        let scene = if self.current_scene == 0 { demo_scenes::get_scene_amount() } else { self.current_scene };
+        *self = PhysicsState::new(scene - 1);   
+    }
 }
 
 impl std::fmt::Display for PhysicsState {

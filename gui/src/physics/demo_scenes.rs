@@ -15,6 +15,18 @@ const DEMO_SCENES: &'static [(&'static str, InitDemoScene)] = &[
     ("Free space", init_free_space),
 ];
 
+pub fn init_scene(scene: usize, state: &mut PhysicsState) {
+    DEMO_SCENES[scene].1(state);
+}
+
+pub fn get_scene_name(scene: usize) -> &'static str {
+    DEMO_SCENES[scene].0
+}
+
+pub fn get_scene_amount() -> usize {
+    DEMO_SCENES.len()
+}
+
 const FLOOR_H: f32 = 0.1;
 const FLOOR_Y_CENTER: f32 = -0.8;
 const FLOOR_Y: f32 = FLOOR_Y_CENTER + FLOOR_H / 2.0;
@@ -142,13 +154,6 @@ fn init_bridge(state: &mut PhysicsState) {
     joint.bias_factor = bias_factor;
 }
 
-fn init_free_space(state: &mut PhysicsState) {
-    let _floor = state.add_unmovable_body(SCREEN_WIDTH, FLOOR_H, 0.0, -1.0);
-    let _cell = state.add_unmovable_body(SCREEN_WIDTH, FLOOR_H, 0.0, 1.0);
-    let _wall_r = state.add_unmovable_body(FLOOR_H, SCREEN_WIDTH, 1.0, 0.0);
-    let _wall_l = state.add_unmovable_body(FLOOR_H, SCREEN_WIDTH, -1.0, 0.0);
-}
-
 fn init_multi_pendulum(state: &mut PhysicsState) {
     let floor = state.add_unmovable_body(SCREEN_WIDTH, FLOOR_H, 0.0, FLOOR_Y_CENTER);
     const W: f32 = 0.11;
@@ -174,12 +179,11 @@ fn init_multi_pendulum(state: &mut PhysicsState) {
     }
 }
 
-pub fn init_scene(scene: usize, state: &mut PhysicsState) {
-    DEMO_SCENES[scene].1(state);
-}
-
-pub fn get_scene_name(scene: usize) -> &'static str {
-    DEMO_SCENES[scene].0
+fn init_free_space(state: &mut PhysicsState) {
+    let _floor = state.add_unmovable_body(SCREEN_WIDTH, FLOOR_H, 0.0, FLOOR_Y_CENTER);
+    let _cell = state.add_unmovable_body(SCREEN_WIDTH, FLOOR_H, 0.0, 1.0);
+    let _wall_r = state.add_unmovable_body(FLOOR_H, SCREEN_WIDTH, 1.0, 0.0);
+    let _wall_l = state.add_unmovable_body(FLOOR_H, SCREEN_WIDTH, -1.0, 0.0);
 }
 
 fn calc_softness_bias(frequency_hz: f32, damping_ratio: f32, mass: f32) -> (f32, f32) {

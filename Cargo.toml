@@ -1,6 +1,12 @@
 [workspace]
+resolver = "2"
 
 members = [
     "gui",
     "box2d",
 ]
+
+[profile.release]
+# Tell `rustc` to optimize for small code size.
+opt-level = "s"
+#opt-level = 0

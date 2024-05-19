@@ -1,3 +1,6 @@
+mod math;
+mod draw_primitives;
+
 use bytemuck::{Pod, Zeroable};
 use wgpu::RenderPipeline;
 use std::borrow::Cow;
@@ -6,6 +9,10 @@ use wgpu_text::{glyph_brush::{ab_glyph::FontRef, Section as TextSection, Text}, 
 use winit::window::Window;
 
 use crate::primitives::{Rectangle, Point, Line};
+use crate::buttons::BUTTONS;
+use draw_primitives::{create_bordered_rectangle, create_line, create_point};
+
+use self::draw_primitives::create_triangle;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
@@ -26,19 +33,19 @@ impl Vertex {
     }
 }
 
-const GREY_COLOR: wgpu::Color = wgpu::Color {
+const GREY_BACKGROUND: wgpu::Color = wgpu::Color {
     r: 0.66, // 167/256
     g: 0.66,
     b: 0.66,
     a: 1.0,
 };
 
-const RED_COLOR: [f32; 3] = [1.0, 0.0, 0.0];
-const BLACK_COLOR: [f32; 3] = [0.0, 0.0, 0.0];
-
-fn color_as_array(color: wgpu::Color) -> [f32; 3] {
-    [color.r as f32, color.g as f32, color.b as f32]
-}
+const GREY_BUTTON: wgpu::Color = wgpu::Color {
+    r: 0.77,
+    g: 0.77,
+    b: 0.77,
+    a: 1.0,
+};
 
 pub struct Render<'a> {
     surface: wgpu::Surface<'a>,
@@ -106,7 +113,7 @@ impl<'a> Render<'a> {
                         view: &view,
                         resolve_target: None,
                         ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(GREY_COLOR),
+                            load: wgpu::LoadOp::Clear(GREY_BACKGROUND),
                             store: wgpu::StoreOp::Store,
                         },
                     })],
@@ -133,18 +140,19 @@ impl<'a> Render<'a> {
         let mut index = 0_u16;
         self.vertices.clear();
         self.indices.clear();
+        (self.vertices, self.indices) = create_buttons(&mut index);
         for r in rectangles {
-            let (vertices, indices) = create_bordered_rectangle(r, &mut index);
+            let (vertices, indices) = create_bordered_rectangle(r, &mut index, &GREY_BACKGROUND);
             self.vertices.extend(vertices.iter());
             self.indices.extend(indices.iter());
         }
         for p in points {
-            let (vertices, indices) = create_point(p, &mut index);
+            let (vertices, indices) = create_point(&p, &mut index);
             self.vertices.extend(vertices.iter());
             self.indices.extend(indices.iter());
         }
         for l in lines {
-            let (vertices, indices) = create_line(l, &mut index);
+            let (vertices, indices) = create_line(&l, &mut index);
             self.vertices.extend(vertices.iter());
             self.indices.extend(indices.iter());
         }
@@ -176,89 +184,22 @@ impl<'a> Render<'a> {
     }
 }
 
-fn create_bordered_rectangle(r: Rectangle, index_start: &mut u16) -> (Vec<Vertex>, Vec<u16>) {
-    let corners = math::get_corners(&r);
-    const BORDER_WIDTH: f32 = 0.015;
-    let mut r = r;
-    r.width -= BORDER_WIDTH;
-    r.height -= BORDER_WIDTH;
-    let inner_corners = math::get_corners(&r);
-
-    let vertices: Vec<Vertex> = vec![
-        //outer square
-        Vertex { position: corners[0], color: [0.5, 0.0, 1.0] },     // A
-        Vertex { position: corners[1], color: [0.9, 1.0, 0.0] },    // B
-        Vertex { position: corners[2], color: [0.0, 0.0, 1.0] },     // C
-        Vertex { position: corners[3], color: [0.0, 0.9, 0.3] },      // D;
-
-        //inner square
-        Vertex { position: inner_corners[0], color: color_as_array(GREY_COLOR) },     
-        Vertex { position: inner_corners[1], color: color_as_array(GREY_COLOR) },   
-        Vertex { position: inner_corners[2], color: color_as_array(GREY_COLOR) },    
-        Vertex { position: inner_corners[3], color: color_as_array(GREY_COLOR) },
-    ];
-    let i = *index_start;
-    let indices: Vec<u16> = vec![
-        //outer square
-        i + 0, i + 1, i + 3,    // A, B, D
-        i + 3, i + 1, i + 2,    // D, B, C
-        //inner square
-        i + 4, i + 5, i + 7,
-        i + 7, i + 5, i + 6,
-    ];
-    *index_start += 8;
-    return (vertices, indices);
-}
-
-fn create_point(p: Point, index_start: &mut u16) -> (Vec<Vertex>, Vec<u16>) {
-    let (x, y) = (p.x, p.y);
-    const SIZE: f32  = 0.01;
-    let color = RED_COLOR;
-    let vertices: Vec<Vertex> = vec![
-        //outer square
-        Vertex { position: [x, y - SIZE], color: color },     // A
-        Vertex { position: [x + SIZE, y - SIZE], color: color },    // B
-        Vertex { position: [x + SIZE, y], color: color },     // C
-        Vertex { position: [x, y], color: color },      // D;
-    ];
-    let i = *index_start;
-    let indices: Vec<u16> = vec![
-        //outer square
-        i + 0, i + 1, i + 3,    // A, B, D
-        i + 3, i + 1, i + 2,    // D, B, C
-    ];
-    *index_start += 4;
-    return (vertices, indices);
-}
-
-fn create_line(line: Line, index_start: &mut u16) -> (Vec<Vertex>, Vec<u16>) {
-    const W: f32 = 0.005;
-    let color: [f32; 3] = BLACK_COLOR;
-    let p1 = &line.p1;
-    let p2 = &line.p2;
-
-    let dx = p2.x - p1.x;
-    let dy = p2.y - p1.y;
-    let l = dx.hypot(dy);
-    let u = dx * W * 0.5 / l;
-    let v = dy * W * 0.5 / l;
-    let vertices: Vec<Vertex> = vec![
-        Vertex { position: [p1.x + v,  p1.y - u], color },
-        Vertex { position: [p1.x - v,  p1.y + u], color },
-        Vertex { position: [p2.x - v,  p2.y + u], color },
-        Vertex { position: [p2.x + v,  p2.y - u], color },
-    ];
-    let i = *index_start;
-    let indices: Vec<u16> = vec![
-        i + 2, i + 1, i + 0,
-        i + 2, i + 0, i + 3,
-    ];
-    *index_start += 4;
-    return (vertices, indices);
+fn create_buttons(index_start: &mut u16) -> (Vec<Vertex>, Vec<u16>) {
+    let mut vertices: Vec<Vertex> = Vec::new();
+    let mut indices: Vec<u16> = Vec::new();
+    for (_name, b) in BUTTONS {
+        let (v, i) = create_bordered_rectangle(b.rect, index_start, &GREY_BUTTON);
+        vertices.extend(v.iter());
+        indices.extend(i.iter());
+        let (v, i) = create_triangle(&b.icon, index_start);
+        vertices.extend(v.iter());
+        indices.extend(i.iter());
+    }
+    (vertices, indices)
 }
 
 fn init_text<'a>(device: & wgpu::Device, config: &wgpu::SurfaceConfiguration) -> TextBrush<FontRef<'a>> {
-    let font: &[u8] = include_bytes!("../fonts/DejaVuSans.ttf");
+    let font: &[u8] = include_bytes!("../../fonts/DejaVuSans.ttf");
     return BrushBuilder::using_font_bytes(font).unwrap()
      /* .initial_cache_size((16_384, 16_384))) */ // use this to avoid resizing cache texture
         .build(&device, config.width, config.height, config.format);
@@ -364,71 +305,4 @@ pub fn setup_render(device: &wgpu::Device, _surface: &wgpu::Surface<'_>,
         multiview: None,
     });
     return render_pipeline;
-}
-
-mod math {
-    use crate::primitives::Rectangle;
-
-    struct Vec2 {
-        pub x: f32,
-        pub y: f32,
-    }
-    struct Mat22 {
-        pub col1: Vec2,
-        pub col2: Vec2,
-    }
-
-    impl Mat22 {
-        fn from_angle(angle: f32) -> Self {
-            let c = f32::cos(angle);
-            let s = f32::sin(angle);
-            Self {
-                col1: Vec2{x: c, y: s},
-                col2: Vec2{x: -s, y: c},
-            }
-        }
-    }
-
-    impl std::ops::Mul<&Vec2> for &Mat22 {
-        type Output = Vec2;
-        fn mul(self, v: &Vec2) -> Self::Output {
-            Vec2{
-                x: self.col1.x * v.x + self.col2.x * v.y,
-                y: self.col1.y * v.x + self.col2.y * v.y
-            }
-        }
-    }
-
-    impl std::ops::Mul<f32> for &Vec2 {
-        type Output = Vec2;
-        fn mul(self, other: f32) -> Self::Output {
-            Vec2{ x: self.x * other, y: self.y * other }
-        }
-    } 
-
-    impl std::ops::Add for &Vec2 {
-        type Output = Vec2;
-        fn add(self, other: Self) -> Self::Output {
-            Vec2{ x: self.x + other.x, y: self.y + other.y}
-        }
-    }
-
-    impl Into<[f32; 2]> for Vec2 {
-        fn into(self) -> [f32; 2] {
-            [self.x, self.y] 
-        }
-    }
-    
-    pub fn get_corners(rect: &Rectangle) -> [[f32; 2]; 4] {
-        let r = Mat22::from_angle(rect.rotation);
-        let center = Vec2{x: rect.center.x, y: rect.center.y};
-        let w = &Vec2{x: rect.width, y: rect.height} * 0.5;
-
-        let left_bot:  [f32; 2] = (&center + &(&r * &Vec2{x: -w.x, y: -w.y})).into();
-        let right_bot: [f32; 2] = (&center + &(&r * &Vec2{x:  w.x, y: -w.y})).into();
-        let right_top: [f32; 2] = (&center + &(&r * &Vec2{x:  w.x, y:  w.y})).into();
-        let left_top:  [f32; 2] = (&center + &(&r * &Vec2{x: -w.x, y:  w.y})).into(); 
-
-        [left_bot, right_bot, right_top, left_top]
-    }
 }

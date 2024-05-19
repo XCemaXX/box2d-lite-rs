@@ -2,7 +2,9 @@
 Box2D-Lite is a small 2D physics engine. It was developed for the [2006 GDC Physics Tutorial](docs/GDC2006_Catto_Erin_PhysicsTutorial.pdf). This is the original version of the larger [Box2D](https://box2d.org) library. The Lite version is more suitable for learning about game physics.  
 
 Original C++ version: https://github.com/erincatto/box2d-lite/tree/master  
-Big thanks to the author Erin Catto.
+Big thanks to the author Erin Catto.  
+
+[Check runnable version online.](https://xcemaxx.github.io/box2d-lite-rs/)
 
 # Building and running
 - [Install wasp-pack](https://rustwasm.github.io/wasm-pack/installer/)  
@@ -10,7 +12,7 @@ Big thanks to the author Erin Catto.
 - Build with: `wasm-pack build --target web --dev` or `wasm-pack build --target web --release`
 - Run server with:
 `python -m http.server 7000`
-- Open site with: http://localhost:7000
+- Open site with: http://localhost:7000  
 
 # Helpful resources
 ## Wgpu
