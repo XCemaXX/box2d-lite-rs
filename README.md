@@ -14,6 +14,10 @@ Big thanks to the author Erin Catto.
 `python -m http.server 7000`
 - Open site with: http://localhost:7000  
 
+# Show
+[Check by yourself online](https://xcemaxx.github.io/box2d-lite-rs/)  
+<img src="./docs/box2d_lite.gif" width="400" height="400" />
+
 # Helpful resources
 ## Wgpu
 https://github.com/vhiribarren/wgpu-sandbox/tree/main  
