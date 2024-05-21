@@ -11,13 +11,14 @@ crate-type = ["cdylib", "rlib"]
 default = ["console_error_panic_hook"]
 
 [dependencies]
-physics = { path = "../physics" }
+physics = { path = "../physics", features = ["random"] }
 
 console_error_panic_hook = { version = "0.1.7", optional = true }
 console_log = "1.0.0"
 log = "0.4.21"
 wasm-bindgen = "0.2.92"
 wasm-bindgen-futures = "0.4.42"
+getrandom = { version = "0.2.14", features = ["js"] }
 web-sys = "0.3.69"
 winit = "0.29.15"
 wgpu = { version = "0.20.0", features = ["webgl"] }

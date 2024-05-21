@@ -199,7 +199,7 @@ fn create_buttons(index_start: &mut u16) -> (Vec<Vertex>, Vec<u16>) {
 }
 
 fn init_text<'a>(device: & wgpu::Device, config: &wgpu::SurfaceConfiguration) -> TextBrush<FontRef<'a>> {
-    let font: &[u8] = include_bytes!("../../fonts/DejaVuSans.ttf");
+    let font: &[u8] = include_bytes!("../../../fonts/DejaVuSans.ttf");
     return BrushBuilder::using_font_bytes(font).unwrap()
      /* .initial_cache_size((16_384, 16_384))) */ // use this to avoid resizing cache texture
         .build(&device, config.width, config.height, config.format);

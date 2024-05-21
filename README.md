@@ -18,10 +18,9 @@ Check runnable version online: [winit](https://xcemaxx.github.io/box2d-lite-rs/w
 
 ## Macroquad version
 - Go to gui folder of the project: `cd gui_macroquad`
-- Build with: `cargo build --target wasm32-unknown-unknown --dev` or `cargo build --target wasm32-unknown-unknown --release`
-- Copy file:  `cp ../target/wasm32-unknown-unknown/debug/macroquad_gui.wasm .` or release
-- Run server with:
-`python -m http.server 7000`
+- Build with: `cargo build --target wasm32-unknown-unknown` or `cargo build --target wasm32-unknown-unknown --release`
+- Copy file: ` cp ../target/wasm32-unknown-unknown/debug/macroquad_gui.wasm ./pkg/macroquad_gui.wasm` or release
+- Run server with: `python -m http.server 7000`
 - Open site with: http://localhost:7000
 
 # Show

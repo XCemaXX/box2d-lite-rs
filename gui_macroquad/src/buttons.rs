@@ -19,7 +19,8 @@ const GRAY_BUTTON: Color = Color {
 
 impl Button {
     fn new(text: &str, font_scale: f32, 
-        top_x: f32, top_y: f32, w: f32, h: f32) -> Self 
+        top_x: f32, top_y: f32, w: f32, h: f32, 
+        font: &Font) -> Self 
     {
         draw_rectangle(top_x, top_y, w, h, GRAY_BUTTON);
         draw_rectangle_lines(top_x, top_y, w, h, 4.0, DARKPURPLE);
@@ -32,6 +33,7 @@ impl Button {
                 font_size: 40,
                 font_scale: font_scale,
                 color: BLACK,
+                font: Some(font),
                 ..Default::default()
             },
         );
@@ -44,15 +46,15 @@ impl Button {
     }
 }
 
-pub fn create_buttons(size_params: &SizeParams) -> Vec<Button> {
+pub fn create_buttons(size_params: &SizeParams, font: &Font) -> Vec<Button> {
     const BUTTONS_TOP: f32 = -0.85;
     let (win_x, win_y) = transform_coords(-1.0, BUTTONS_TOP, &size_params);
     let button_height = size_params.width + size_params.offset_y - win_y;
     let button_width = size_params.width / 3.0;
     
     vec![
-        Button::new("Prev",    size_params.font_scale, win_x,                      win_y, button_width, button_height),
-        Button::new("Restart", size_params.font_scale, win_x + button_width,       win_y, button_width, button_height),
-        Button::new("Next",    size_params.font_scale, win_x + button_width * 2.0, win_y, button_width, button_height),
+        Button::new("Prev",    size_params.font_scale, win_x,                      win_y, button_width, button_height, font),
+        Button::new("Restart", size_params.font_scale, win_x + button_width,       win_y, button_width, button_height, font),
+        Button::new("Next",    size_params.font_scale, win_x + button_width * 2.0, win_y, button_width, button_height, font),
     ]
 }

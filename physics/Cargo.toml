@@ -5,3 +5,8 @@ edition = "2021"
 
 [dependencies]
 box2d = { path = "../box2d" }
+rand = { version = "0.8.5", optional = true }
+
+[features]
+default = []
+random = ["dep:rand"]

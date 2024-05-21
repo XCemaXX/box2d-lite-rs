@@ -22,6 +22,7 @@ fn window_conf() -> Conf {
 async fn main() {
     let mut physics_state = PhysicsState::new(0);
     let mut last_update = get_time();
+    let font = load_ttf_font_from_bytes(include_bytes!("../../fonts/DejaVuSans.ttf")).unwrap();
 
     loop {
         clear_background(GRAY_BACKGROUND);
@@ -39,7 +40,7 @@ async fn main() {
         });
         draw_rectangle_lines(size_params.offset_x, size_params.offset_y, size_params.width, size_params.width, 2.0, BLACK);
 
-        let buttons = buttons::create_buttons(&size_params);
+        let buttons = buttons::create_buttons(&size_params, &font);
         update_physics_by_input(&mut physics_state, buttons, &size_params);
 
         physics_state.step(dt as f32);
@@ -76,12 +77,21 @@ fn update_frame_physics(rectangles: Vec<Rectangle>, points: Vec<Point>, lines: V
 fn update_physics_by_input(physics_state: &mut PhysicsState, buttons: Vec<Button>, size_params: &SizeParams) {
     let (mouse_x, mouse_y) = mouse_position();
 
+    const DIGIT_START: usize = KeyCode::Key1 as usize;
+    const DIGIT_END: usize = KeyCode::Key9 as usize;
     if let Some(key) = get_last_key_pressed() {
         match key {
             KeyCode::Space => { physics_state.restart(); },
             KeyCode::N => { physics_state.change_to_next_scene(); },
             KeyCode::P => { physics_state.change_to_prev_scene(); },
-            _ => {}
+            digit => {
+                match digit as usize {
+                    DIGIT_START..=DIGIT_END => { 
+                        let scene = digit as usize - DIGIT_START;
+                        *physics_state = PhysicsState::new(scene);},
+                    _ => { },
+                }
+            }
         }
     }; 
     if mouse_x > size_params.offset_x && mouse_x < size_params.offset_x + size_params.width &&
