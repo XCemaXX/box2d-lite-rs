@@ -1,5 +1,5 @@
 use crate::render::math;
-use crate::primitives::{Rectangle, Point, Line, Triangle};
+use physics::primitives::{Rectangle, Point, Line, Triangle};
 use crate::render::Vertex;
 
 const RED_COLOR: [f32; 3] = [1.0, 0.0, 0.0];

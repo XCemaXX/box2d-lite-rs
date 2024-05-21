@@ -1,4 +1,4 @@
-use crate::primitives::Rectangle;
+use physics::primitives::Rectangle;
 
 struct Vec2 {
     pub x: f32,

@@ -4,18 +4,29 @@ Box2D-Lite is a small 2D physics engine. It was developed for the [2006 GDC Phys
 Original C++ version: https://github.com/erincatto/box2d-lite/tree/master  
 Big thanks to the author Erin Catto.  
 
-[Check runnable version online.](https://xcemaxx.github.io/box2d-lite-rs/)
+Check runnable version online: [winit](https://xcemaxx.github.io/box2d-lite-rs/winit_version), 
+[macroquad](https://xcemaxx.github.io/box2d-lite-rs/macroquad_version) 
 
 # Building and running
+## Winit version
 - [Install wasp-pack](https://rustwasm.github.io/wasm-pack/installer/)  
 - Go to gui folder of the project: `cd gui`
 - Build with: `wasm-pack build --target web --dev` or `wasm-pack build --target web --release`
 - Run server with:
 `python -m http.server 7000`
-- Open site with: http://localhost:7000  
+- Open site with: http://localhost:7000
+
+## Macroquad version
+- Go to gui folder of the project: `cd gui_macroquad`
+- Build with: `cargo build --target wasm32-unknown-unknown --dev` or `cargo build --target wasm32-unknown-unknown --release`
+- Copy file:  `cp ../target/wasm32-unknown-unknown/debug/macroquad_gui.wasm .` or release
+- Run server with:
+`python -m http.server 7000`
+- Open site with: http://localhost:7000
 
 # Show
-[Check by yourself online](https://xcemaxx.github.io/box2d-lite-rs/)  
+[Check by yourself online winit version](https://xcemaxx.github.io/box2d-lite-rs/winit_version)  
+[Check by yourself online macroquad version](https://xcemaxx.github.io/box2d-lite-rs/macroquad_version)  
 <img src="./docs/box2d_lite.gif" width="400" height="400" />
 
 # Helpful resources

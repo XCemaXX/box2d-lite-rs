@@ -2,8 +2,10 @@
 resolver = "2"
 
 members = [
-    "gui",
     "box2d",
+    "physics",
+    "gui",
+    "gui_macroquad",
 ]
 
 [profile.release]

@@ -1,4 +1,4 @@
-use crate::primitives::{Point, Rectangle, Triangle};
+use physics::primitives::{Point, Rectangle, Triangle};
 pub struct Button {
     pub rect: Rectangle,
     pub icon: Triangle,

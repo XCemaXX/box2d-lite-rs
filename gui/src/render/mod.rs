@@ -8,7 +8,7 @@ use wgpu::util::DeviceExt;
 use wgpu_text::{glyph_brush::{ab_glyph::FontRef, Section as TextSection, Text}, BrushBuilder, TextBrush};
 use winit::window::Window;
 
-use crate::primitives::{Rectangle, Point, Line};
+use physics::primitives::{Rectangle, Point, Line};
 use crate::buttons::BUTTONS;
 use draw_primitives::{create_bordered_rectangle, create_line, create_point};
 
@@ -33,14 +33,14 @@ impl Vertex {
     }
 }
 
-const GREY_BACKGROUND: wgpu::Color = wgpu::Color {
+const GRAY_BACKGROUND: wgpu::Color = wgpu::Color {
     r: 0.66, // 167/256
     g: 0.66,
     b: 0.66,
     a: 1.0,
 };
 
-const GREY_BUTTON: wgpu::Color = wgpu::Color {
+const GRAY_BUTTON: wgpu::Color = wgpu::Color {
     r: 0.77,
     g: 0.77,
     b: 0.77,
@@ -113,7 +113,7 @@ impl<'a> Render<'a> {
                         view: &view,
                         resolve_target: None,
                         ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(GREY_BACKGROUND),
+                            load: wgpu::LoadOp::Clear(GRAY_BACKGROUND),
                             store: wgpu::StoreOp::Store,
                         },
                     })],
@@ -142,7 +142,7 @@ impl<'a> Render<'a> {
         self.indices.clear();
         (self.vertices, self.indices) = create_buttons(&mut index);
         for r in rectangles {
-            let (vertices, indices) = create_bordered_rectangle(r, &mut index, &GREY_BACKGROUND);
+            let (vertices, indices) = create_bordered_rectangle(r, &mut index, &GRAY_BACKGROUND);
             self.vertices.extend(vertices.iter());
             self.indices.extend(indices.iter());
         }
@@ -188,7 +188,7 @@ fn create_buttons(index_start: &mut u16) -> (Vec<Vertex>, Vec<u16>) {
     let mut vertices: Vec<Vertex> = Vec::new();
     let mut indices: Vec<u16> = Vec::new();
     for (_name, b) in BUTTONS {
-        let (v, i) = create_bordered_rectangle(b.rect, index_start, &GREY_BUTTON);
+        let (v, i) = create_bordered_rectangle(b.rect, index_start, &GRAY_BUTTON);
         vertices.extend(v.iter());
         indices.extend(i.iter());
         let (v, i) = create_triangle(&b.icon, index_start);

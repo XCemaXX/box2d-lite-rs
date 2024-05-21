@@ -1,6 +1,5 @@
 
 use crate::PhysicsState;
-use rand::Rng;
 
 type InitDemoScene = fn(&mut PhysicsState);
 const DEMO_SCENES: &'static [(&'static str, InitDemoScene)] = &[
@@ -76,7 +75,6 @@ fn init_vertical_stack_scene(state: &mut PhysicsState) {
     const W: f32 = 0.15;
     const UNSTABLE_COEF: f32 = 1.0 / 4.0;
     const STABLE_COEF: f32 = 1.0 / 6.0;
-    const OFFSET_LIMIT: std::ops::Range<f32> = -W / 8.0 .. W / 8.0;
     const MASS: f32 = 200.0;
     for i in 0..6 {
         let offset = if i % 2 == 0 { -W * UNSTABLE_COEF } else { W * UNSTABLE_COEF };
@@ -84,9 +82,6 @@ fn init_vertical_stack_scene(state: &mut PhysicsState) {
 
         let offset = if i % 2 == 0 { -W * STABLE_COEF } else { W * STABLE_COEF };
         let _stable = state.add_body(W, W, MASS, 0.4 + offset, FLOOR_Y + W / 2.0 + i as f32 * W);
-
-        let offset = rand::thread_rng().gen_range(OFFSET_LIMIT);
-        let _random = state.add_body(W, W, MASS, 0.8 + offset, FLOOR_Y + W / 2.0 + i as f32 * W);
     }
     let _floor = state.add_unmovable_body(SCREEN_WIDTH, FLOOR_H, 0.0, FLOOR_Y_CENTER);
 }

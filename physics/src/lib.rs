@@ -1,10 +1,11 @@
 mod demo_scenes;
+pub mod primitives;
 
 use std::rc::Rc;
 use std::cell::RefCell;
 
 use box2d::{World, Body, Joint, Vec2, UNMOVABLE_MASS};
-use crate::primitives::{Rectangle, Point, Line};
+use primitives::{Rectangle, Point, Line};
 
 pub struct PhysicsState {
     world: World,

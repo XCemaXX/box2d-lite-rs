@@ -1,8 +1,6 @@
 mod utils;
 mod render;
 mod input;
-mod primitives;
-mod physics;
 mod buttons;
 
 use wasm_bindgen::prelude::*;
