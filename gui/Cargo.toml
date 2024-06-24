@@ -20,7 +20,7 @@ wasm-bindgen = "0.2.92"
 wasm-bindgen-futures = "0.4.42"
 getrandom = { version = "0.2.14", features = ["js"] }
 web-sys = "0.3.69"
-winit = "0.29.15"
+winit = "0.30.3"
 wgpu = { version = "0.20.0", features = ["webgl"] }
 wgpu_text = "0.8.8"
 bytemuck = "1.15.0"
