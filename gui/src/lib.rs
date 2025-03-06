@@ -3,14 +3,17 @@ mod render;
 mod input;
 mod buttons;
 
-use wasm_bindgen::prelude::*;
+use std::sync::Arc;
 use winit::{
-    event::{Event, WindowEvent, MouseButton, KeyEvent, TouchPhase}, 
-    event_loop::EventLoop, window::{Window, WindowBuilder}
+    application::ApplicationHandler,
+    dpi::PhysicalSize,
+    event::{WindowEvent, MouseButton, KeyEvent, TouchPhase},
+    window::Window,
+    keyboard::PhysicalKey,
 };
-use wgpu::web_sys;
-use winit::error::OsError;
-use winit::keyboard::PhysicalKey;
+
+use futures::channel::oneshot::Receiver;
+use wasm_bindgen::prelude::*;
 
 use render::Render;
 use input::InputState;
@@ -25,85 +28,153 @@ extern "C" {
     fn log(s: &str);
 }
 
-async fn run(event_loop: EventLoop<()>, window: Window) {
-    let mut render_state = Render::new(&window).await;    
-    let mut input_state = InputState::default();
-    let mut physics_state = PhysicsState::new(0);
+#[derive(Default)]
+pub struct App {
+    window: Option<Arc<Window>>,
+    render: Option<Render<'static>>,
+    last_render_time: Option<instant::Instant>,
+    renderer_receiver: Option<Receiver<Render<'static>>>,
+    last_size: (u32, u32),
+    input_state: Option<InputState>,
+    physics_state: Option<PhysicsState>,
+}
 
-    window.set_visible(true);
-    log("Start event loop");
-    let window = &window;
-    let mut last_time = instant::Instant::now();
+impl ApplicationHandler for App {
+    fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
+        let mut attributes = Window::default_attributes();
 
-    event_loop
-        .run(move |event, target| {
-            if let Event::WindowEvent {
-                window_id: _,
-                event,
-            } = event
-            {
-                match event {
-                    WindowEvent::Resized(new_size) => {
-                        render_state.resize(new_size);
-                    },
-                    WindowEvent::RedrawRequested => {
-                        let dt = last_time.elapsed().as_secs_f32();
-                        last_time = instant::Instant::now();
-                        window.request_redraw();
+        use winit::platform::web::WindowAttributesExtWebSys;
+        let canvas = web_sys::window()
+            .unwrap()
+            .document()
+            .unwrap()
+            .get_element_by_id(WEBAPP_CANVAS_ID)
+            .unwrap()
+            .dyn_into::<web_sys::HtmlCanvasElement>()
+            .unwrap();
+        let canvas_width = canvas.width();
+        let canvas_height = canvas.height();
+        self.last_size = (canvas_width, canvas_height);
+        attributes = attributes.with_canvas(Some(canvas));
 
-                        input_events_to_physics(&mut input_state, &mut physics_state);
-                        physics_state.step(dt);
-                        let rectangles = physics_state.get_rectangles();
-                        let collide_points = physics_state.get_collide_points();
-                        let joint_lines = physics_state.get_joint_lines();
+        if let Ok(window) = event_loop.create_window(attributes) {
+            let first_window_handle = self.window.is_none();
+            let window_handle = Arc::new(window);
+            self.window = Some(window_handle.clone());
+            if first_window_handle {
+                let (sender, receiver) = futures::channel::oneshot::channel();
+                self.renderer_receiver = Some(receiver);
+                std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+                console_log::init().expect("Failed to initialize logger!");
+                log::info!("Canvas dimensions: ({canvas_width} x {canvas_height})");
+                wasm_bindgen_futures::spawn_local(async move {
+                    let render =
+                        Render::new(window_handle.clone(), canvas_width, canvas_height).await;    
+                    if sender.send(render).is_err() {
+                        log::error!("Failed to create and send render!");
+                    }
+                });
+                self.last_render_time = Some(instant::Instant::now());
+                self.input_state = Some(InputState::default());
+                self.physics_state = Some(PhysicsState::new(0));
+            }
+        }
+    }
 
-                        let controls_text = 
+    fn window_event(
+        &mut self,
+        event_loop: &winit::event_loop::ActiveEventLoop,
+        _window_id: winit::window::WindowId,
+        event: winit::event::WindowEvent,
+    ) {
+        let mut renderer_received = false;
+        if let Some(receiver) = self.renderer_receiver.as_mut() {
+            if let Ok(Some(render)) = receiver.try_recv() {
+                self.render = Some(render);
+                renderer_received = true;
+            }
+        }
+        if renderer_received {
+            self.renderer_receiver = None;
+        }
+
+        let (Some(render_state), Some(window), Some(last_render_time), 
+            Some(input_state), Some(physics_state)) = (
+            self.render.as_mut(),
+            self.window.as_ref(),
+            self.last_render_time.as_mut(),
+            self.input_state.as_mut(),
+            self.physics_state.as_mut(),
+        ) else {
+            return;
+        };
+
+        match event {
+            WindowEvent::KeyboardInput { event: KeyEvent {
+                state,
+                physical_key: PhysicalKey::Code(key),
+                ..
+            }, .. } => {
+                input_state.update_keyboard(state.is_pressed(), key);
+            }
+            WindowEvent::Resized(PhysicalSize { width, height }) => {
+                let (width, height) = ((width).max(1), (height).max(1));
+                log::info!("Resizing renderer surface to: ({width}, {height})");
+                render_state.resize(width, height);
+                self.last_size = (width, height);
+            }
+            WindowEvent::CloseRequested => {
+                log::info!("Close requested. Exiting...");
+                event_loop.exit();
+            }
+            WindowEvent::RedrawRequested => {
+                let dt = last_render_time.elapsed().as_secs_f32();
+                *last_render_time = instant::Instant::now();
+                
+                input_events_to_physics(input_state, physics_state);
+                physics_state.step(dt);
+                let rectangles = physics_state.get_rectangles();
+                let collide_points = physics_state.get_collide_points();
+                let joint_lines = physics_state.get_joint_lines();
+
+                let controls_text = 
 "Controls: 1-9 scenes; Space: restart; P, N - prev, next scene;
                Click - add box";
-                        if cfg!(debug_assertions) {
-                        render_state.text = format!("{}\nfps: {:.3}\n{}\n{}", 
-                            input_state, 1.0 / dt, physics_state,
-                            controls_text);
-                        } else {
-                            render_state.text = format!("fps: {:.3}\n{}\n{}", 
-                            1.0 / dt, physics_state,
-                            controls_text);
-                        }
-                        
-                        render_state.update_frame(rectangles, collide_points, joint_lines);
-                        render_state.render();
-                    },
-                    WindowEvent::MouseInput { state, button, .. } => {
-                        if button == MouseButton::Left {
-                            input_state.update_cursor_buttons(state.is_pressed());
-                        }
-                    },
-                    WindowEvent::CursorMoved { position, .. } => {
-                        let (x, y) = mouse_coords_to_render(position.x, position.y, window.inner_size());
-                        input_state.update_cursor_pos(x, y);
-                    },
-                    WindowEvent::Touch(t) => {
-                        let (x, y) = touch_coords_to_render(t.location.x, t.location.y, window);
-                        input_state.update_cursor_pos(x, y);
-                        match t.phase {
-                            TouchPhase::Started => { input_state.update_cursor_buttons(true); },
-                            TouchPhase::Ended => { input_state.update_cursor_buttons(false); },
-                            _ => {},
-                        };
-                    },
-                    WindowEvent::KeyboardInput { event: KeyEvent {
-                        state,
-                        physical_key: PhysicalKey::Code(key),
-                        ..
-                    }, .. } => {
-                        input_state.update_keyboard(state.is_pressed(), key);
-                    },
-                    WindowEvent::CloseRequested => target.exit(),
+                if cfg!(debug_assertions) {
+                render_state.text = format!("{}\nfps: {:.3}\n{}\n{}", 
+                    input_state, 1.0 / dt, physics_state,
+                    controls_text);
+                } else {
+                    render_state.text = format!("fps: {:.3}\n{}\n{}", 
+                    1.0 / dt, physics_state,
+                    controls_text);
+                }
+                
+                render_state.update_frame(rectangles, collide_points, joint_lines);
+                render_state.render();
+            }
+            WindowEvent::MouseInput { state, button, .. } => {
+                if button == MouseButton::Left {
+                    input_state.update_cursor_buttons(state.is_pressed());
+                }
+            }
+            WindowEvent::CursorMoved { position, .. } => {
+                let (x, y) = mouse_coords_to_render(position.x, position.y, window.inner_size());
+                input_state.update_cursor_pos(x, y);
+            }
+            WindowEvent::Touch(t) => {
+                let (x, y) = touch_coords_to_render(t.location.x, t.location.y, window);
+                input_state.update_cursor_pos(x, y);
+                match t.phase {
+                    TouchPhase::Started => { input_state.update_cursor_buttons(true); },
+                    TouchPhase::Ended => { input_state.update_cursor_buttons(false); },
                     _ => {},
                 };
             }
-        })
-        .unwrap();
+            _ => (),
+        }
+        window.request_redraw();
+    }
 }
 
 fn touch_coords_to_render(x: f64, y: f64, window: &Window) -> (f32, f32) {
@@ -153,23 +224,12 @@ fn input_events_to_physics(input_state: &mut InputState, physics_state: &mut Phy
     }
 }
 
-fn create_window<T>(event_loop: &EventLoop<T>) -> Result<Window, OsError> {
-    use winit::platform::web::WindowBuilderExtWebSys;
-    let dom_window = web_sys::window().unwrap();
-    let dom_document = dom_window.document().unwrap();
-    let dom_canvas = dom_document.get_element_by_id(WEBAPP_CANVAS_ID).unwrap();
-    let canvas = dom_canvas.dyn_into::<web_sys::HtmlCanvasElement>().ok();
-    WindowBuilder::default().with_canvas(canvas).build(event_loop)
-}
-
 #[wasm_bindgen(start)]
 pub fn start() {
     //alert("Hello, gui!");
-    std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-    console_log::init().expect("could not initialize logger");
 
-    let event_loop = EventLoop::new().unwrap();
-    let window = create_window(&event_loop).unwrap();
-
-    wasm_bindgen_futures::spawn_local(run(event_loop, window));
+    let event_loop = winit::event_loop::EventLoop::builder().build().unwrap();
+    event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
+    let mut app = App::default();
+    event_loop.run_app(&mut app).unwrap();
 }
