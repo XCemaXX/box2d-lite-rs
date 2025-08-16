@@ -1,5 +1,5 @@
-use winit::keyboard::KeyCode;
 use crate::buttons::BUTTONS;
+use winit::keyboard::KeyCode;
 
 pub enum Event {
     Restart,
@@ -32,15 +32,22 @@ impl InputState {
             for (name, b) in BUTTONS {
                 if b.in_button(self.cursor.x, self.cursor.y) {
                     match name {
-                        &"Prev" => { self.events.push(Event::ChangeToPrevScene); },
-                        &"Restart" => { self.events.push(Event::Restart); },
-                        &"Next" => { self.events.push(Event::ChangeToNextScene); },
+                        &"Prev" => {
+                            self.events.push(Event::ChangeToPrevScene);
+                        }
+                        &"Restart" => {
+                            self.events.push(Event::Restart);
+                        }
+                        &"Next" => {
+                            self.events.push(Event::ChangeToNextScene);
+                        }
                         _ => {}
                     }
                     return;
                 }
-            };
-            self.events.push(Event::CreateBox(self.cursor.x, self.cursor.y));
+            }
+            self.events
+                .push(Event::CreateBox(self.cursor.x, self.cursor.y));
         }
     }
 
@@ -58,8 +65,8 @@ impl InputState {
         }
         if self.keyboard.letter_pressed {
             match self.keyboard.letter {
-                KeyLetters::N => { self.events.push(Event::ChangeToNextScene) },
-                KeyLetters::P => { self.events.push(Event::ChangeToPrevScene)},
+                KeyLetters::N => self.events.push(Event::ChangeToNextScene),
+                KeyLetters::P => self.events.push(Event::ChangeToPrevScene),
                 _ => {}
             }
         }
@@ -72,8 +79,7 @@ impl InputState {
 
 impl std::fmt::Display for InputState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Mouse: {:.3} {:.3}", 
-            self.cursor.x, self.cursor.y)
+        write!(f, "Mouse: {:.3} {:.3}", self.cursor.x, self.cursor.y)
     }
 }
 
@@ -104,6 +110,7 @@ impl CursorState {
     }
 }
 
+#[derive(Debug)]
 enum KeyLetters {
     None,
     N,
@@ -111,10 +118,12 @@ enum KeyLetters {
 }
 
 impl Default for KeyLetters {
-    fn default() -> Self { Self::None }
+    fn default() -> Self {
+        Self::None
+    }
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct KeyBoardState {
     space_pressed: bool,
     digit_pressed: bool,
@@ -129,21 +138,22 @@ impl KeyBoardState {
         const DIGIT_END: usize = KeyCode::Digit9 as usize;
 
         let k = match key {
-            KeyCode::Space => { &mut self.space_pressed },
-            KeyCode::KeyN => { 
+            KeyCode::Space => &mut self.space_pressed,
+            KeyCode::KeyN => {
                 self.letter = KeyLetters::N;
-                &mut self.letter_pressed 
-            },
+                &mut self.letter_pressed
+            }
             KeyCode::KeyP => {
                 self.letter = KeyLetters::P;
-                &mut self.letter_pressed 
-            },
-            digit => {
-                match digit as usize {
-                    DIGIT_START..=DIGIT_END => { 
-                        self.digit_num = digit as usize - DIGIT_START; 
-                        &mut self.digit_pressed },
-                    _ => { return; },
+                &mut self.letter_pressed
+            }
+            digit => match digit as usize {
+                DIGIT_START..=DIGIT_END => {
+                    self.digit_num = digit as usize - DIGIT_START;
+                    &mut self.digit_pressed
+                }
+                _ => {
+                    return;
                 }
             },
         };

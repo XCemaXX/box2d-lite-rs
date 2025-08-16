@@ -1,4 +1,4 @@
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct Point {
     pub x: f32,
     pub y: f32,
@@ -6,11 +6,11 @@ pub struct Point {
 
 impl Into<[f32; 2]> for Point {
     fn into(self) -> [f32; 2] {
-        [self.x, self.y] 
+        [self.x, self.y]
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Clone)]
 pub struct Rectangle {
     pub center: Point,
     pub width: f32,

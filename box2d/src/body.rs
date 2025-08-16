@@ -1,22 +1,22 @@
-use crate::math_utils::{Vec2, cross_v_v};
+use crate::math_utils::{cross_v_v, Vec2};
 
 pub const UNMOVABLE_MASS: f32 = f32::MAX;
 
 pub struct Body {
-	pub position: Vec2, // in the middle of body
+    pub position: Vec2, // in the middle of body
     pub rotation: f32,
 
-	pub velocity: Vec2,
+    pub velocity: Vec2,
     pub angular_velocity: f32,
 
-	pub force: Vec2,
-	pub torque: f32,
+    pub force: Vec2,
+    pub torque: f32,
 
-	pub width: Vec2,
+    pub width: Vec2,
 
-	pub friction: f32,
+    pub friction: f32,
     mass: f32,
-	pub inv_mass: f32,
+    pub inv_mass: f32,
     i: f32,
     pub inv_i: f32,
 
@@ -25,7 +25,7 @@ pub struct Body {
 
 impl Default for Body {
     fn default() -> Self {
-        Self { 
+        Self {
             position: Default::default(),
             rotation: 0.0,
             velocity: Default::default(),
@@ -67,25 +67,24 @@ impl Body {
             self.inv_mass = 1.0 / self.mass;
             self.i = self.mass * (self.width.x * self.width.x + self.width.y * self.width.y) / 12.0;
             self.inv_i = 1.0 / self.i;
-        }
-        else {
+        } else {
             self.inv_mass = 0.0;
             self.i = UNMOVABLE_MASS;
             self.inv_i = 0.0;
         }
     }
 
-    pub fn sub_velocity(&mut self, r: &Vec2, p: &Vec2) {
-        self.velocity -= &(self.inv_mass * p);
+    pub fn sub_velocity(&mut self, r: Vec2, p: Vec2) {
+        self.velocity -= self.inv_mass * p;
         self.angular_velocity -= self.inv_i * cross_v_v(r, p);
     }
 
-    pub fn add_velocity(&mut self, r: &Vec2, p: &Vec2) {
-        self.velocity += &(self.inv_mass * p);
+    pub fn add_velocity(&mut self, r: Vec2, p: Vec2) {
+        self.velocity += self.inv_mass * p;
         self.angular_velocity += self.inv_i * cross_v_v(r, p);
     }
 
-    pub fn add_force(&mut self, f: &Vec2) {
-		self.force += f;
-	}
+    pub fn add_force(&mut self, f: Vec2) {
+        self.force += f;
+    }
 }

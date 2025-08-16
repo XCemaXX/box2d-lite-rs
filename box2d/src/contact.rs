@@ -12,13 +12,13 @@ use crate::math_utils::Vec2;
 //   v3 ------ v4
 //        e3
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum EdgeNumbers {
-	NoEdge,
-	Edge1,
-	Edge2,
-	Edge3,
-	Edge4,
+    NoEdge,
+    Edge1,
+    Edge2,
+    Edge3,
+    Edge4,
 }
 
 impl Default for EdgeNumbers {
@@ -27,7 +27,7 @@ impl Default for EdgeNumbers {
     }
 }
 
-#[derive(Default, Clone, Copy, PartialEq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub struct Feature {
     pub in_edge1: EdgeNumbers,
     pub out_edge1: EdgeNumbers,
@@ -35,15 +35,15 @@ pub struct Feature {
     pub out_edge2: EdgeNumbers,
 }
 
-#[derive(Default, Copy, Clone)]
+#[derive(Default, Clone)]
 pub struct Contact {
     pub position: Vec2,
     pub normal: Vec2,
     pub r1: Vec2,
     pub r2: Vec2,
     pub separation: f32,
-    pub pn: f32, // accumulated normal impulse
-    pub pt: f32, // accumulated tangent impulse
+    pub pn: f32,  // accumulated normal impulse
+    pub pt: f32,  // accumulated tangent impulse
     pub pnb: f32, // accumulated normal impulse for position bias
     pub mass_normal: f32,
     pub mass_tangent: f32,
