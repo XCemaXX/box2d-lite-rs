@@ -11,7 +11,7 @@ Check runnable version online: [winit](https://xcemaxx.github.io/box2d-lite-rs/w
 ## Winit version
 - [Install wasp-pack](https://rustwasm.github.io/wasm-pack/installer/)  
 - Go to gui folder of the project: `cd gui`
-- Build with: `wasm-pack build --target web --dev` or `wasm-pack build --target web --release`
+- Build with: `RUSTFLAGS='--cfg getrandom_backend="wasm_js"' wasm-pack build --target web --dev` or `wasm-pack build --target web --release`
 - Run server with:
 `python -m http.server 7000`
 - Open site with: http://localhost:7000

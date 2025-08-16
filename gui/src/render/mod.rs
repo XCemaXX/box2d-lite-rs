@@ -6,8 +6,8 @@ use std::borrow::Cow;
 use wgpu::util::DeviceExt;
 use wgpu::{RenderPipeline, Surface};
 use wgpu_text::{
-    glyph_brush::{ab_glyph::FontRef, Section as TextSection, Text},
     BrushBuilder, TextBrush,
+    glyph_brush::{Section as TextSection, Text, ab_glyph::FontRef},
 };
 
 use crate::buttons::BUTTONS;
@@ -127,6 +127,7 @@ impl<'a> Render<'a> {
                     load: wgpu::LoadOp::Clear(GRAY_BACKGROUND),
                     store: wgpu::StoreOp::Store,
                 },
+                depth_slice: None,
             })],
             depth_stencil_attachment: None,
             timestamp_writes: None,
@@ -264,17 +265,15 @@ async fn init_screen<'a>(
 
     // Create the logical device and command queue
     let (device, queue) = adapter
-        .request_device(
-            &wgpu::DeviceDescriptor {
-                label: Some("WGPU Device"),
-                required_features: wgpu::Features::default(),
-                // Make sure we use the texture resolution limits from the adapter, so we can support images the size of the swapchain.
-                required_limits: wgpu::Limits::downlevel_webgl2_defaults()
-                    .using_resolution(adapter.limits()),
-                memory_hints: wgpu::MemoryHints::default(),
-            },
-            None,
-        )
+        .request_device(&wgpu::DeviceDescriptor {
+            label: Some("WGPU Device"),
+            required_features: wgpu::Features::default(),
+            // Make sure we use the texture resolution limits from the adapter, so we can support images the size of the swapchain.
+            required_limits: wgpu::Limits::downlevel_webgl2_defaults()
+                .using_resolution(adapter.limits()),
+            memory_hints: wgpu::MemoryHints::default(),
+            trace: wgpu::Trace::Off,
+        })
         .await
         .expect("Failed to create device");
     return (surface, adapter, device, queue);
