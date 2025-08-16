@@ -1,11 +1,11 @@
 mod demo_scenes;
 pub mod primitives;
 
-use std::rc::Rc;
 use std::cell::RefCell;
+use std::rc::Rc;
 
-use box2d::{World, Body, Joint, Vec2, UNMOVABLE_MASS};
-use primitives::{Rectangle, Point, Line};
+use box2d::{Body, Joint, UNMOVABLE_MASS, Vec2, World};
+use primitives::{Line, Point, Rectangle};
 
 pub struct PhysicsState {
     world: World,
@@ -21,22 +21,36 @@ impl PhysicsState {
     }
 
     fn add_body(&mut self, w: f32, h: f32, mass: f32, pos_x: f32, pos_y: f32) -> Rc<RefCell<Body>> {
-        let body = Rc::new(RefCell::new(
-            Body::new(w * SCALE_MULT, h * SCALE_MULT, mass, pos_x * SCALE_MULT, pos_y * SCALE_MULT)
-        ));
+        let body = Rc::new(RefCell::new(Body::new(
+            w * SCALE_MULT,
+            h * SCALE_MULT,
+            mass,
+            pos_x * SCALE_MULT,
+            pos_y * SCALE_MULT,
+        )));
         self.world.add_body(body.clone());
         body
     }
 
-    fn add_joint(&mut self, body1: Rc<RefCell<Body>>, body2: Rc<RefCell<Body>>, anchor_x: f32, anchor_y: f32) -> Rc<RefCell<Joint>> {
-        let joint = self.world.add_joint(body1, body2, &Vec2::new(anchor_x * SCALE_MULT, anchor_y * SCALE_MULT));
+    fn add_joint(
+        &mut self,
+        body1: Rc<RefCell<Body>>,
+        body2: Rc<RefCell<Body>>,
+        anchor_x: f32,
+        anchor_y: f32,
+    ) -> Rc<RefCell<Joint>> {
+        let joint = self.world.add_joint(
+            body1,
+            body2,
+            Vec2::new(anchor_x * SCALE_MULT, anchor_y * SCALE_MULT),
+        );
         joint
     }
 
     pub fn new(demo_scene: usize) -> Self {
         let gravity = Vec2::new(0.0, GRAVITY);
         let iterations = 10;
-        let mut state = PhysicsState{ 
+        let mut state = PhysicsState {
             world: World::new(gravity, iterations),
             current_scene: demo_scene,
         };
@@ -49,32 +63,51 @@ impl PhysicsState {
     }
 
     pub fn get_rectangles(&self) -> Vec<Rectangle> {
-        self.world.get_bodies().iter().map(|body| {
-            let body = body.borrow();
-            let center = &body.position;
-            Rectangle {
-                center: Point{ x: center.x / SCALE_MULT, y: center.y / SCALE_MULT },
-                width: body.width.x / SCALE_MULT,
-                height: body.width.y / SCALE_MULT,
-                rotation: body.rotation,
-            }
-        }).collect()
+        self.world
+            .get_bodies()
+            .iter()
+            .map(|body| {
+                let body = body.borrow();
+                let center = &body.position;
+                Rectangle {
+                    center: Point {
+                        x: center.x / SCALE_MULT,
+                        y: center.y / SCALE_MULT,
+                    },
+                    width: body.width.x / SCALE_MULT,
+                    height: body.width.y / SCALE_MULT,
+                    rotation: body.rotation,
+                }
+            })
+            .collect()
     }
 
     pub fn get_collide_points(&self) -> Vec<Point> {
-        self.world.get_collide_points().iter()
-            .map(|p| { Point { 
+        self.world
+            .get_collide_points()
+            .iter()
+            .map(|p| Point {
                 x: p.x / SCALE_MULT,
                 y: p.y / SCALE_MULT,
-            }}).collect()
+            })
+            .collect()
     }
 
     pub fn get_joint_lines(&self) -> Vec<Line> {
-        self.world.get_joint_lines().iter()
-            .map(|(start, end)| { Line {
-                p1: Point { x: start.x / SCALE_MULT, y: start.y / SCALE_MULT },
-                p2: Point { x: end.x / SCALE_MULT,   y: end.y / SCALE_MULT },
-            }}).collect()
+        self.world
+            .get_joint_lines()
+            .iter()
+            .map(|(start, end)| Line {
+                p1: Point {
+                    x: start.x / SCALE_MULT,
+                    y: start.y / SCALE_MULT,
+                },
+                p2: Point {
+                    x: end.x / SCALE_MULT,
+                    y: end.y / SCALE_MULT,
+                },
+            })
+            .collect()
     }
 
     pub fn add_rectangle(&mut self, x: f32, y: f32) {
@@ -83,25 +116,32 @@ impl PhysicsState {
 
     pub fn restart(&mut self) {
         let scene = self.current_scene;
-        *self = PhysicsState::new(scene); 
+        *self = PhysicsState::new(scene);
     }
 
     pub fn change_to_next_scene(&mut self) {
         let scene = (self.current_scene + 1) % demo_scenes::get_scene_amount();
-        *self = PhysicsState::new(scene);   
+        *self = PhysicsState::new(scene);
     }
 
     pub fn change_to_prev_scene(&mut self) {
-        let scene = if self.current_scene == 0 { demo_scenes::get_scene_amount() } else { self.current_scene };
-        *self = PhysicsState::new(scene - 1);   
+        let scene = if self.current_scene == 0 {
+            demo_scenes::get_scene_amount()
+        } else {
+            self.current_scene
+        };
+        *self = PhysicsState::new(scene - 1);
     }
 }
 
 impl std::fmt::Display for PhysicsState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Scene {}: {}. Bodies: {}", 
-            self.current_scene + 1, 
-            demo_scenes::get_scene_name(self.current_scene), 
-            self.world.bodies_size())
+        write!(
+            f,
+            "Scene {}: {}. Bodies: {}",
+            self.current_scene + 1,
+            demo_scenes::get_scene_name(self.current_scene),
+            self.world.bodies_size()
+        )
     }
 }

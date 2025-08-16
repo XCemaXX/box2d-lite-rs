@@ -1,4 +1,3 @@
-
 #[derive(Debug, Copy, Clone, Default)]
 pub struct Vec2 {
     pub x: f32,
@@ -15,79 +14,77 @@ impl Vec2 {
         self.y = y;
     }
 
-    pub fn abs(&self) -> Self {
-        Self::new(f32::abs(self.x), f32::abs(self.y))
+    pub fn abs(self) -> Self {
+        Self::new(self.x.abs(), self.y.abs())
     }
 }
 
-impl std::ops::AddAssign<&Vec2> for Vec2 {
-    fn add_assign(&mut self, other: &Vec2) {
+impl std::ops::AddAssign for Vec2 {
+    fn add_assign(&mut self, other: Vec2) {
         self.x += other.x;
         self.y += other.y;
     }
 }
 
-impl std::ops::SubAssign<&Vec2> for Vec2 {
-    fn sub_assign(&mut self, other: &Vec2) {
+impl std::ops::SubAssign for Vec2 {
+    fn sub_assign(&mut self, other: Vec2) {
         self.x -= other.x;
         self.y -= other.y;
     }
 }
 
-impl std::ops::Add for &Vec2 {
+impl std::ops::Add for Vec2 {
     type Output = Vec2;
-    fn add(self, other: Self) -> Self::Output {
+    fn add(self, other: Vec2) -> Self::Output {
         Vec2::new(self.x + other.x, self.y + other.y)
     }
 }
 
-impl std::ops::Sub for &Vec2 {
+impl std::ops::Sub for Vec2 {
     type Output = Vec2;
-    fn sub(self, other: Self) -> Self::Output {
+    fn sub(self, other: Vec2) -> Self::Output {
         Vec2::new(self.x - other.x, self.y - other.y)
     }
 }
 
-pub fn dot(a: &Vec2, b: &Vec2) -> f32 {
-	a.x * b.x + a.y * b.y
+pub fn dot(a: Vec2, b: Vec2) -> f32 {
+    a.x * b.x + a.y * b.y
 }
 
-pub fn cross_v_v(a: &Vec2, b: &Vec2) -> f32 {
-	a.x * b.y - a.y * b.x
+pub fn cross_v_v(a: Vec2, b: Vec2) -> f32 {
+    a.x * b.y - a.y * b.x
 }
 
-pub fn cross_v_f(a: &Vec2, s: f32) -> Vec2 {
-	Vec2::new(s * a.y, -s * a.x)
+pub fn cross_v_f(a: Vec2, s: f32) -> Vec2 {
+    Vec2::new(s * a.y, -s * a.x)
 }
 
-pub fn cross_f_v(s: f32, a: &Vec2) -> Vec2 {
-	Vec2::new(-s * a.y, s * a.x)
+pub fn cross_f_v(s: f32, a: Vec2) -> Vec2 {
+    Vec2::new(-s * a.y, s * a.x)
 }
 
-impl std::ops::Neg for &Vec2 {
+impl std::ops::Neg for Vec2 {
     type Output = Vec2;
     fn neg(self) -> Self::Output {
         Vec2::new(-self.x, -self.y)
     }
 }
 
-// ###########f32
-impl std::ops::Mul<f32> for &Vec2 {
+impl std::ops::Mul<f32> for Vec2 {
     type Output = Vec2;
-    fn mul(self, other: f32) -> Self::Output {
-        Vec2::new(self.x * other, self.y * other)
-    }
-} 
-
-impl std::ops::Mul<&Vec2> for f32 {
-    type Output = Vec2;
-    fn mul(self, other: &Vec2) -> Self::Output {
-        Vec2::new(self * other.x, self * other.y)
+    fn mul(self, s: f32) -> Self::Output {
+        Vec2::new(self.x * s, self.y * s)
     }
 }
 
-// #################mat22
-#[derive(Default)]
+impl std::ops::Mul<Vec2> for f32 {
+    type Output = Vec2;
+    fn mul(self, v: Vec2) -> Self::Output {
+        Vec2::new(self * v.x, self * v.y)
+    }
+}
+
+#[derive(Debug, Copy, Clone, Default)]
 pub struct Mat22 {
     pub col1: Vec2,
     pub col2: Vec2,
@@ -107,59 +104,50 @@ impl Mat22 {
         }
     }
 
-    pub fn transpose(&self) -> Self {
+    pub fn transpose(self) -> Self {
         Self::new(
-            Vec2::new(self.col1.x, self.col2.x), 
-            Vec2::new(self.col1.y, self.col2.y)
+            Vec2::new(self.col1.x, self.col2.x),
+            Vec2::new(self.col1.y, self.col2.y),
         )
     }
 
-    pub fn abs(&self) -> Self {
-        Self::new(
-            self.col1.abs(),
-            self.col2.abs()
-        )
+    pub fn abs(self) -> Self {
+        Self::new(self.col1.abs(), self.col2.abs())
     }
 
-    pub fn invert(&self) -> Self {
-		let (a, b, c ,d) = (self.col1.x, self.col2.x, self.col1.y, self.col2.y);
-		let mut bmat = Mat22::default();
-		let det = a * d - b * c;
-		let det = 1.0 / det;
+    pub fn invert(self) -> Self {
+        let (a, b, c, d) = (self.col1.x, self.col2.x, self.col1.y, self.col2.y);
+        let det = 1.0 / (a * d - b * c);
 
-		(bmat.col1.x, bmat.col2.x) = ( det * d, -det * b);
-		(bmat.col1.y, bmat.col2.y) = (-det * c,  det * a);
-		bmat
-	}
+        Mat22::new(Vec2::new(det * d, -det * c), Vec2::new(-det * b, det * a))
+    }
 }
 
-impl std::ops::Mul for &Mat22 {
+impl std::ops::Mul for Mat22 {
     type Output = Mat22;
-    fn mul(self, other: Self) -> Self::Output {
-        Mat22::new(self * &other.col1, self * &other.col2)
+    fn mul(self, other: Mat22) -> Self::Output {
+        Mat22::new(self * other.col1, self * other.col2)
     }
 }
 
-impl std::ops::Add for &Mat22 {
+impl std::ops::Add for Mat22 {
     type Output = Mat22;
-    fn add(self, other: Self) -> Self::Output {
-        Mat22::new(&self.col1 + &other.col1, &self.col2 + &other.col2)
+    fn add(self, other: Mat22) -> Self::Output {
+        Mat22::new(self.col1 + other.col1, self.col2 + other.col2)
     }
 }
 
-//################ Combined
-
-impl std::ops::Mul<&Vec2> for &Mat22 {
+impl std::ops::Mul<Vec2> for Mat22 {
     type Output = Vec2;
 
-    fn mul(self, v: &Vec2) -> Self::Output {
+    fn mul(self, v: Vec2) -> Self::Output {
         Vec2::new(
             self.col1.x * v.x + self.col2.x * v.y,
-            self.col1.y * v.x + self.col2.y * v.y
+            self.col1.y * v.x + self.col2.y * v.y,
         )
     }
 }
 
 pub fn clamp(a: f32, low: f32, high: f32) -> f32 {
-	f32::max(low, f32::min(a, high))
+    f32::max(low, f32::min(a, high))
 }

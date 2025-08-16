@@ -1,15 +1,18 @@
-mod math;
 mod draw_primitives;
+mod math;
 
 use bytemuck::{Pod, Zeroable};
-use wgpu::{RenderPipeline, Surface};
 use std::borrow::Cow;
 use wgpu::util::DeviceExt;
-use wgpu_text::{glyph_brush::{ab_glyph::FontRef, Section as TextSection, Text}, BrushBuilder, TextBrush};
+use wgpu::{RenderPipeline, Surface};
+use wgpu_text::{
+    BrushBuilder, TextBrush,
+    glyph_brush::{Section as TextSection, Text, ab_glyph::FontRef},
+};
 
-use physics::primitives::{Rectangle, Point, Line};
 use crate::buttons::BUTTONS;
 use draw_primitives::{create_bordered_rectangle, create_line, create_point};
+use physics::primitives::{Line, Point, Rectangle};
 
 use self::draw_primitives::create_triangle;
 
@@ -69,8 +72,12 @@ pub struct Render<'a> {
 }
 
 impl<'a> Render<'a> {
-    pub async fn new(window: impl Into<wgpu::SurfaceTarget<'a>>, width: u32, height: u32) -> Render<'a> {
-        let mut size = Size{width, height};
+    pub async fn new(
+        window: impl Into<wgpu::SurfaceTarget<'a>>,
+        width: u32,
+        height: u32,
+    ) -> Render<'a> {
+        let mut size = Size { width, height };
         size.width = size.width.max(600);
         size.height = size.height.max(600);
         let (surface, adapter, device, queue) = init_screen(window).await;
@@ -98,48 +105,57 @@ impl<'a> Render<'a> {
     }
 
     pub fn render(&mut self) -> () {
-        let frame = self.surface
+        let frame = self
+            .surface
             .get_current_texture()
             .expect("Failed to acquire next swap chain texture");
         let view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
-        let mut encoder =
-            self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Render Encoder"),
             });
-        
-        let mut rpass =
-            encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Render Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(GRAY_BACKGROUND),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
-        
+
+        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("Render Pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(GRAY_BACKGROUND),
+                    store: wgpu::StoreOp::Store,
+                },
+                depth_slice: None,
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+
         rpass.set_pipeline(&self.render_pipeline);
         rpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         rpass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
         rpass.draw_indexed(0..self.indices.len() as u32, 0, 0..1);
 
         let text_section = TextSection::default().add_text(Text::new(&self.text));
-        self.text_brush.queue(&self.device, &self.queue, vec![&text_section]).unwrap();
+        self.text_brush
+            .queue(&self.device, &self.queue, vec![&text_section])
+            .unwrap();
         self.text_brush.draw(&mut rpass);
         drop(rpass);
-        
+
         self.queue.submit(std::iter::once(encoder.finish()));
         frame.present();
     }
 
-    pub fn update_frame(&mut self, rectangles: Vec<Rectangle>, points: Vec<Point>, lines: Vec<Line>) {
+    pub fn update_frame(
+        &mut self,
+        rectangles: Vec<Rectangle>,
+        points: Vec<Point>,
+        lines: Vec<Line>,
+    ) {
         let mut index = 0_u16;
         self.vertices.clear();
         self.indices.clear();
@@ -163,17 +179,20 @@ impl<'a> Render<'a> {
     }
 
     fn update_buffers(&mut self) {
-        self.vertex_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(&self.vertices),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-        self.index_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        self.vertex_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Vertex Buffer"),
+                contents: bytemuck::cast_slice(&self.vertices),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
+        self.index_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Index Buffer"),
                 contents: bytemuck::cast_slice(&self.indices),
                 usage: wgpu::BufferUsages::INDEX,
-            }
-        );
+            });
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
@@ -191,7 +210,7 @@ fn create_buttons(index_start: &mut u16) -> (Vec<Vertex>, Vec<u16>) {
     let mut vertices: Vec<Vertex> = Vec::new();
     let mut indices: Vec<u16> = Vec::new();
     for (_name, b) in BUTTONS {
-        let (v, i) = create_bordered_rectangle(b.rect, index_start, &GRAY_BUTTON);
+        let (v, i) = create_bordered_rectangle(b.rect.clone(), index_start, &GRAY_BUTTON);
         vertices.extend(v.iter());
         indices.extend(i.iter());
         let (v, i) = create_triangle(&b.icon, index_start);
@@ -201,33 +220,35 @@ fn create_buttons(index_start: &mut u16) -> (Vec<Vertex>, Vec<u16>) {
     (vertices, indices)
 }
 
-fn init_text<'a>(device: & wgpu::Device, config: &wgpu::SurfaceConfiguration) -> TextBrush<FontRef<'a>> {
+fn init_text<'a>(
+    device: &wgpu::Device,
+    config: &wgpu::SurfaceConfiguration,
+) -> TextBrush<FontRef<'a>> {
     let font: &[u8] = include_bytes!("../../../fonts/DejaVuSans.ttf");
-    return BrushBuilder::using_font_bytes(font).unwrap()
-     /* .initial_cache_size((16_384, 16_384))) */ // use this to avoid resizing cache texture
+    return BrushBuilder::using_font_bytes(font)
+        .unwrap()
+        /* .initial_cache_size((16_384, 16_384))) */ // use this to avoid resizing cache texture
         .build(&device, config.width, config.height, config.format);
 }
 
 fn init_vertices(device: &wgpu::Device) -> (wgpu::Buffer, wgpu::Buffer, Vec<Vertex>, Vec<u16>) {
     let (v, i) = (Vec::new(), Vec::new());
-    let vertex_buffer = device.create_buffer_init(
-        &wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(&v),
-            usage: wgpu::BufferUsages::VERTEX,
+    let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Vertex Buffer"),
+        contents: bytemuck::cast_slice(&v),
+        usage: wgpu::BufferUsages::VERTEX,
     });
-    let index_buffer = device.create_buffer_init(
-        &wgpu::util::BufferInitDescriptor {
-            label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(&i),
-            usage: wgpu::BufferUsages::INDEX,
-        }
-    );
+    let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Index Buffer"),
+        contents: bytemuck::cast_slice(&i),
+        usage: wgpu::BufferUsages::INDEX,
+    });
     return (vertex_buffer, index_buffer, v, i);
 }
 
-async fn init_screen<'a>(window: impl Into<wgpu::SurfaceTarget<'a>>) ->
-(wgpu::Surface<'a>, wgpu::Adapter, wgpu::Device, wgpu::Queue) {
+async fn init_screen<'a>(
+    window: impl Into<wgpu::SurfaceTarget<'a>>,
+) -> (wgpu::Surface<'a>, wgpu::Adapter, wgpu::Device, wgpu::Queue) {
     let instance = wgpu::Instance::default();
 
     //window.set_cursor_icon(CursorIcon::Grab);
@@ -244,24 +265,26 @@ async fn init_screen<'a>(window: impl Into<wgpu::SurfaceTarget<'a>>) ->
 
     // Create the logical device and command queue
     let (device, queue) = adapter
-        .request_device(
-            &wgpu::DeviceDescriptor {
-                label: Some("WGPU Device"),
-                required_features: wgpu::Features::default(),
-                // Make sure we use the texture resolution limits from the adapter, so we can support images the size of the swapchain.
-                required_limits: wgpu::Limits::downlevel_webgl2_defaults()
-                    .using_resolution(adapter.limits()),
-                memory_hints: wgpu::MemoryHints::default(),
-            },
-            None,
-        )
+        .request_device(&wgpu::DeviceDescriptor {
+            label: Some("WGPU Device"),
+            required_features: wgpu::Features::default(),
+            // Make sure we use the texture resolution limits from the adapter, so we can support images the size of the swapchain.
+            required_limits: wgpu::Limits::downlevel_webgl2_defaults()
+                .using_resolution(adapter.limits()),
+            memory_hints: wgpu::MemoryHints::default(),
+            trace: wgpu::Trace::Off,
+        })
         .await
         .expect("Failed to create device");
     return (surface, adapter, device, queue);
 }
 
-pub fn setup_render(device: &wgpu::Device, _surface: &wgpu::Surface<'_>,
-    _adapter: &wgpu::Adapter, config: &wgpu::SurfaceConfiguration) -> RenderPipeline {
+pub fn setup_render(
+    device: &wgpu::Device,
+    _surface: &wgpu::Surface<'_>,
+    _adapter: &wgpu::Adapter,
+    config: &wgpu::SurfaceConfiguration,
+) -> RenderPipeline {
     // Load the shaders from disk
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: None,
@@ -311,7 +334,11 @@ pub fn setup_render(device: &wgpu::Device, _surface: &wgpu::Surface<'_>,
     return render_pipeline;
 }
 
-fn config_surface(surface: &Surface, adapter: &wgpu::Adapter, size: &Size) -> wgpu::SurfaceConfiguration {
+fn config_surface(
+    surface: &Surface,
+    adapter: &wgpu::Adapter,
+    size: &Size,
+) -> wgpu::SurfaceConfiguration {
     let surface_capabilities = surface.get_capabilities(&adapter);
     let surface_format = surface_capabilities
         .formats
@@ -319,7 +346,7 @@ fn config_surface(surface: &Surface, adapter: &wgpu::Adapter, size: &Size) -> wg
         .copied()
         .find(|f| !f.is_srgb()) // egui wants a non-srgb surface texture
         .unwrap_or(surface_capabilities.formats[0]);
-    
+
     wgpu::SurfaceConfiguration {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         format: surface_format,

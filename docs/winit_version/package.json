@@ -3,7 +3,7 @@
   "collaborators": [
     "XCemaXX <xcemaxx@gmail.com>"
   ],
-  "version": "0.1.0",
+  "version": "0.2.0",
   "files": [
     "wgpu_gui_bg.wasm",
     "wgpu_gui.js",

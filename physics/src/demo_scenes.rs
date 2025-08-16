@@ -1,4 +1,3 @@
-
 use crate::PhysicsState;
 
 #[cfg(feature = "random")]
@@ -8,7 +7,10 @@ type InitDemoScene = fn(&mut PhysicsState);
 const DEMO_SCENES: &'static [(&'static str, InitDemoScene)] = &[
     ("Two boxes", init_two_boxes_scene),
     ("Simple pendulum", init_simple_pendulum),
-    ("Varying friction coefficients", init_varying_friction_coefficients),
+    (
+        "Varying friction coefficients",
+        init_varying_friction_coefficients,
+    ),
     ("Vertical stack", init_vertical_stack_scene),
     ("Pyramid", init_pyramid),
     ("Teeter", init_teeter),
@@ -54,7 +56,7 @@ fn init_simple_pendulum(state: &mut PhysicsState) {
     state.add_joint(body1, body2, 0.0, center_y);
 }
 
-fn init_varying_friction_coefficients(state: &mut PhysicsState) {    
+fn init_varying_friction_coefficients(state: &mut PhysicsState) {
     let slide = state.add_unmovable_body(1.1, 0.04, -0.2, FLOOR_Y + 1.25);
     slide.borrow_mut().rotation = -0.25;
     let slide = state.add_unmovable_body(1.1, 0.04, 0.05, FLOOR_Y + 0.75);
@@ -80,17 +82,26 @@ fn init_vertical_stack_scene(state: &mut PhysicsState) {
     const STABLE_COEF: f32 = 1.0 / 6.0;
     const MASS: f32 = 200.0;
     for i in 0..6 {
-        let offset = if i % 2 == 0 { -W * UNSTABLE_COEF } else { W * UNSTABLE_COEF };
+        let offset = if i % 2 == 0 {
+            -W * UNSTABLE_COEF
+        } else {
+            W * UNSTABLE_COEF
+        };
         let _unstable = state.add_body(W, W, MASS, -0.7 + offset, FLOOR_Y + W / 2.0 + i as f32 * W);
 
-        let offset = if i % 2 == 0 { -W * STABLE_COEF } else { W * STABLE_COEF };
+        let offset = if i % 2 == 0 {
+            -W * STABLE_COEF
+        } else {
+            W * STABLE_COEF
+        };
         let _stable = state.add_body(W, W, MASS, 0.4 + offset, FLOOR_Y + W / 2.0 + i as f32 * W);
 
         #[cfg(feature = "random")]
         {
-            const OFFSET_LIMIT: std::ops::Range<f32> = -W / 8.0 .. W / 8.0;
-            let offset = rand::thread_rng().gen_range(OFFSET_LIMIT);
-            let _random = state.add_body(W, W, MASS, 0.8 + offset, FLOOR_Y + W / 2.0 + i as f32 * W);
+            const OFFSET_LIMIT: std::ops::Range<f32> = -W / 8.0..W / 8.0;
+            let offset = rand::rng().random_range(OFFSET_LIMIT);
+            let _random =
+                state.add_body(W, W, MASS, 0.8 + offset, FLOOR_Y + W / 2.0 + i as f32 * W);
         }
     }
     let _floor = state.add_unmovable_body(SCREEN_WIDTH, FLOOR_H, 0.0, FLOOR_Y_CENTER);
@@ -102,21 +113,25 @@ fn init_pyramid(state: &mut PhysicsState) {
     let start = (SCREEN_WIDTH - W * count as f32) / 2.0 - SCREEN_WIDTH / 2.0;
     let extra_space = W / 3.0;
     for j in 0..count {
-        for i in 0..(count-j) {
+        for i in 0..(count - j) {
             let i = i as f32;
             let j = j as f32;
-            state.add_body(W, W, 1000.0, 
-                start + i * W + j * W / 2.0, 
-                FLOOR_Y + W / 2.0 + j * (W + extra_space) + extra_space);
+            state.add_body(
+                W,
+                W,
+                1000.0,
+                start + i * W + j * W / 2.0,
+                FLOOR_Y + W / 2.0 + j * (W + extra_space) + extra_space,
+            );
         }
     }
-    
+
     state.add_unmovable_body(SCREEN_WIDTH, FLOOR_H, 0.0, FLOOR_Y_CENTER);
 }
 fn init_teeter(state: &mut PhysicsState) {
     let anchor_y = FLOOR_Y + 0.13;
     let teeter_w = 1.2;
-    
+
     let teeter = state.add_body(teeter_w, 0.05, 50.0, 0.0, anchor_y);
     let floor = state.add_unmovable_body(SCREEN_WIDTH, FLOOR_H, 0.0, FLOOR_Y_CENTER);
     state.add_joint(teeter, floor, 0.0, anchor_y);
@@ -145,15 +160,19 @@ fn init_bridge(state: &mut PhysicsState) {
     for i in 0..count {
         let pos_x = start_x + i as f32 * (W + extra_space);
         let cur_body = state.add_body(W, H, mass, pos_x, pos_y);
-        let pos_x = pos_x - W / 2.0 ;
+        let pos_x = pos_x - W / 2.0;
         let joint = state.add_joint(prev_body, cur_body.clone(), pos_x, pos_y);
         let mut joint = joint.borrow_mut();
         joint.softness = softness;
         joint.bias_factor = bias_factor;
         prev_body = cur_body;
     }
-    let joint = state.add_joint(floor.clone(), prev_body.clone(), 
-        start_x + (count - 1) as f32 * (W + extra_space) + W / 2.0, pos_y);
+    let joint = state.add_joint(
+        floor.clone(),
+        prev_body.clone(),
+        start_x + (count - 1) as f32 * (W + extra_space) + W / 2.0,
+        pos_y,
+    );
     let mut joint = joint.borrow_mut();
     joint.softness = softness;
     joint.bias_factor = bias_factor;
@@ -175,7 +194,7 @@ fn init_multi_pendulum(state: &mut PhysicsState) {
     for i in 0..count {
         let pos_x = start_x + i as f32 * (W + extra_space);
         let cur_body = state.add_body(W, H, mass, pos_x, pos_y);
-        let pos_x = pos_x - W / 2.0 ;
+        let pos_x = pos_x - W / 2.0;
         let joint = state.add_joint(prev_body.clone(), cur_body.clone(), pos_x, pos_y);
         let mut joint = joint.borrow_mut();
         joint.softness = softness;
@@ -192,15 +211,15 @@ fn init_free_space(state: &mut PhysicsState) {
 }
 
 fn calc_softness_bias(frequency_hz: f32, damping_ratio: f32, mass: f32) -> (f32, f32) {
-	// frequency in radians
-	let omega = 2.0 * std::f32::consts::PI * frequency_hz;
-	// damping coefficient
-	let d = 2.0 * mass * damping_ratio * omega;
-	// spring stifness
-	let k = mass * omega * omega;
-	// magic formulas
+    // frequency in radians
+    let omega = 2.0 * std::f32::consts::PI * frequency_hz;
+    // damping coefficient
+    let d = 2.0 * mass * damping_ratio * omega;
+    // spring stifness
+    let k = mass * omega * omega;
+    // magic formulas
     let time_step = 1.0 / 60.0;
-	let softness = 1.0 / (d + time_step * k);
-	let bias_factor = time_step * k / (d + time_step * k);
+    let softness = 1.0 / (d + time_step * k);
+    let bias_factor = time_step * k / (d + time_step * k);
     (softness, bias_factor)
 }
