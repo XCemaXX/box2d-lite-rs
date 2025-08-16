@@ -87,15 +87,12 @@ impl ApplicationHandler for App {
         _window_id: winit::window::WindowId,
         event: winit::event::WindowEvent,
     ) {
-        let mut renderer_received = false;
-        if let Some(receiver) = self.renderer_receiver.as_mut() {
+        if let Some(mut receiver) = self.renderer_receiver.take() {
             if let Ok(Some(render)) = receiver.try_recv() {
                 self.render = Some(render);
-                renderer_received = true;
+            } else {
+                self.renderer_receiver = Some(receiver);
             }
-        }
-        if renderer_received {
-            self.renderer_receiver = None;
         }
 
         let (
