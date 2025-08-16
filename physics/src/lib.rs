@@ -4,7 +4,7 @@ pub mod primitives;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use box2d::{Body, Joint, Vec2, World, UNMOVABLE_MASS};
+use box2d::{Body, Joint, UNMOVABLE_MASS, Vec2, World};
 use primitives::{Line, Point, Rectangle};
 
 pub struct PhysicsState {

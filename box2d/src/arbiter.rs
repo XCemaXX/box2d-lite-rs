@@ -1,7 +1,7 @@
 use crate::body::Body;
 use crate::collide::collide;
 use crate::contact::{Contact, MAX_CONTACT_POINT};
-use crate::math_utils::{clamp, cross_f_v, cross_v_f, dot, Vec2};
+use crate::math_utils::{Vec2, clamp, cross_f_v, cross_v_f, dot};
 use crate::world::{ACCUMULATE_IMPULSES, POSITION_CORRECTION, WARM_STARTING};
 use std::cell::RefCell;
 use std::rc::Rc;

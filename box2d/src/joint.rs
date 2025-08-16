@@ -1,5 +1,5 @@
 use crate::body::Body;
-use crate::math_utils::{cross_f_v, Mat22, Vec2};
+use crate::math_utils::{Mat22, Vec2, cross_f_v};
 use crate::world::{POSITION_CORRECTION, WARM_STARTING};
 use std::cell::RefCell;
 use std::rc::Rc;

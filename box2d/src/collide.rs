@@ -1,6 +1,6 @@
 use crate::body::Body;
 use crate::contact::{Contact, EdgeNumbers, Feature, MAX_CONTACT_POINT};
-use crate::math_utils::{dot, Mat22, Vec2};
+use crate::math_utils::{Mat22, Vec2, dot};
 
 #[derive(Debug, PartialEq)]
 enum Axis {
