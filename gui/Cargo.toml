@@ -22,7 +22,7 @@ getrandom = { version = "0.3.3", features = ["wasm_js"] }
 winit = "0.30.12"
 wgpu = { version = "26.0.1", default-features = false, features = ["webgl"] }
 wgpu_text = "26.0.0"
-bytemuck = "1.23.2"
+bytemuck = "1.25.0"
 web-sys = { version = "0.3.77", features = [
     "Window",
     "Document",
