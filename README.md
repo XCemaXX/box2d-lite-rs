@@ -8,20 +8,20 @@ Check runnable version online: [winit](https://xcemaxx.github.io/box2d-lite-rs/w
 [macroquad](https://xcemaxx.github.io/box2d-lite-rs/macroquad_version) 
 
 # Building and running
+Both versions build in release mode by default. Pass `--dev` for a debug build.
+
 ## Winit version
-- [Install wasp-pack](https://rustwasm.github.io/wasm-pack/installer/)  
-- Go to gui folder of the project: `cd gui`
-- Build with: `RUSTFLAGS='--cfg getrandom_backend="wasm_js"' wasm-pack build --target web --dev` or `wasm-pack build --target web --release`
-- Run server with:
-`python -m http.server 7000`
-- Open site with: http://localhost:7000
+- Install wasm-bindgen-cli with the same version as the `wasm-bindgen` crate in `Cargo.lock`:
+`cargo install wasm-bindgen-cli --version <version> --locked`
+- Build: `./gui/build.sh`
+- Run server: `cd gui && python -m http.server 7000`
+- Open site: http://localhost:7000
 
 ## Macroquad version
-- Go to gui folder of the project: `cd gui_macroquad`
-- Build with: `cargo build --target wasm32-unknown-unknown` or `cargo build --target wasm32-unknown-unknown --release`
-- Copy file: ` cp ../target/wasm32-unknown-unknown/debug/macroquad_gui.wasm ./pkg/macroquad_gui.wasm` or release
-- Run server with: `python -m http.server 7000`
-- Open site with: http://localhost:7000
+- Build: `./gui_macroquad/build.sh`
+- Run server: `cd gui_macroquad && python -m http.server 7001`
+- Open site: http://localhost:7001
+- After a macroquad update, copy `js/mq_js_bundle.js` from the macroquad repository (same tag) to `gui_macroquad/pkg/`.
 
 # Show
 [Check by yourself online winit version](https://xcemaxx.github.io/box2d-lite-rs/winit_version)  

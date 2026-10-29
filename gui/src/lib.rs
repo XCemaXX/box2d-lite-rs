@@ -32,7 +32,7 @@ extern "C" {
 pub struct App {
     window: Option<Arc<Window>>,
     render: Option<Render<'static>>,
-    last_render_time: Option<instant::Instant>,
+    last_render_time: Option<web_time::Instant>,
     renderer_receiver: Option<Receiver<Render<'static>>>,
     last_size: (u32, u32),
     input_state: Option<InputState>,
@@ -74,7 +74,7 @@ impl ApplicationHandler for App {
                         log::error!("Failed to create and send render!");
                     }
                 });
-                self.last_render_time = Some(instant::Instant::now());
+                self.last_render_time = Some(web_time::Instant::now());
                 self.input_state = Some(InputState::default());
                 self.physics_state = Some(PhysicsState::new(0));
             }
@@ -136,7 +136,7 @@ impl ApplicationHandler for App {
             }
             WindowEvent::RedrawRequested => {
                 let dt = last_render_time.elapsed().as_secs_f32();
-                *last_render_time = instant::Instant::now();
+                *last_render_time = web_time::Instant::now();
 
                 input_events_to_physics(input_state, physics_state);
                 physics_state.step(dt);
