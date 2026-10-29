@@ -3,7 +3,7 @@ use crate::body::Body;
 use crate::joint::Joint;
 use crate::math_utils::Vec2;
 
-use std::cell::RefCell;
+use std::cell::{Ref, RefCell};
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
@@ -30,29 +30,21 @@ impl World {
         }
     }
 
-    pub fn get_bodies(&self) -> &Vec<Rc<RefCell<Body>>> {
-        &self.bodies
+    pub fn bodies(&self) -> impl Iterator<Item = Ref<'_, Body>> {
+        self.bodies.iter().map(|b| b.borrow())
     }
 
-    pub fn bodies_size(&self) -> usize {
+    pub fn body_count(&self) -> usize {
         self.bodies.len()
     }
 
-    pub fn get_collide_points(&self) -> Vec<Vec2> {
-        let mut res = Vec::new();
-        for arb in self.arbiters.values() {
-            res.extend(arb.get_collide_points().iter());
-        }
-        res
+    pub fn collide_points(&self) -> impl Iterator<Item = Vec2> + '_ {
+        self.arbiters.values().flat_map(Arbiter::collide_points)
     }
 
-    pub fn get_joint_lines(&self) -> Vec<(Vec2, Vec2)> {
-        let mut res = Vec::new();
-        for joint in &self.joints {
-            let joint = joint.borrow();
-            res.extend(joint.get_joint_lines().iter());
-        }
-        res
+    /// Two lines per joint: from each body center to the anchor.
+    pub fn joint_lines(&self) -> impl Iterator<Item = (Vec2, Vec2)> + '_ {
+        self.joints.iter().flat_map(|j| j.borrow().lines())
     }
 
     pub fn add_body(&mut self, body: Rc<RefCell<Body>>) {

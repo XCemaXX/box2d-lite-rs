@@ -69,52 +69,24 @@ impl PhysicsState {
         }
     }
 
-    pub fn get_rectangles(&self) -> Vec<Rectangle> {
-        self.world
-            .get_bodies()
-            .iter()
-            .map(|body| {
-                let body = body.borrow();
-                let center = &body.position;
-                Rectangle {
-                    center: Point {
-                        x: center.x / SCALE_MULT,
-                        y: center.y / SCALE_MULT,
-                    },
-                    width: body.width.x / SCALE_MULT,
-                    height: body.width.y / SCALE_MULT,
-                    rotation: body.rotation,
-                }
-            })
-            .collect()
+    pub fn rectangles(&self) -> impl Iterator<Item = Rectangle> + '_ {
+        self.world.bodies().map(|body| Rectangle {
+            center: to_point(body.position),
+            width: body.width.x / SCALE_MULT,
+            height: body.width.y / SCALE_MULT,
+            rotation: body.rotation,
+        })
     }
 
-    pub fn get_collide_points(&self) -> Vec<Point> {
-        self.world
-            .get_collide_points()
-            .iter()
-            .map(|p| Point {
-                x: p.x / SCALE_MULT,
-                y: p.y / SCALE_MULT,
-            })
-            .collect()
+    pub fn collide_points(&self) -> impl Iterator<Item = Point> + '_ {
+        self.world.collide_points().map(to_point)
     }
 
-    pub fn get_joint_lines(&self) -> Vec<Line> {
-        self.world
-            .get_joint_lines()
-            .iter()
-            .map(|(start, end)| Line {
-                p1: Point {
-                    x: start.x / SCALE_MULT,
-                    y: start.y / SCALE_MULT,
-                },
-                p2: Point {
-                    x: end.x / SCALE_MULT,
-                    y: end.y / SCALE_MULT,
-                },
-            })
-            .collect()
+    pub fn joint_lines(&self) -> impl Iterator<Item = Line> + '_ {
+        self.world.joint_lines().map(|(start, end)| Line {
+            p1: to_point(start),
+            p2: to_point(end),
+        })
     }
 
     pub fn add_rectangle(&mut self, x: f32, y: f32) {
@@ -148,8 +120,15 @@ impl std::fmt::Display for PhysicsState {
             "Scene {}: {}. Bodies: {}",
             self.current_scene + 1,
             demo_scenes::get_scene_name(self.current_scene),
-            self.world.bodies_size()
+            self.world.body_count()
         )
+    }
+}
+
+fn to_point(v: Vec2) -> Point {
+    Point {
+        x: v.x / SCALE_MULT,
+        y: v.y / SCALE_MULT,
     }
 }
 
@@ -194,8 +173,8 @@ mod tests {
             for _ in 0..(hz as usize * 4) {
                 state.step(1.0 / hz);
             }
-            let r = state.get_rectangles();
-            r[r.len() / 2].center.y
+            let n = state.rectangles().count();
+            state.rectangles().nth(n / 2).unwrap().center.y
         };
         assert!((sag(60.0) - sag(240.0)).abs() < 0.01);
     }

@@ -4,7 +4,6 @@ mod letterbox;
 use buttons::{Action, Button};
 use letterbox::Letterbox;
 use physics::PhysicsState;
-use physics::primitives::{Line, Point, Rectangle};
 
 use macroquad::prelude::*;
 use macroquad::ui::{hash, root_ui};
@@ -58,10 +57,7 @@ async fn main() {
         update_physics_by_input(&mut physics_state, &buttons, &letterbox);
 
         physics_state.step(dt as f32);
-        let rectangles = physics_state.get_rectangles();
-        let collide_points = physics_state.get_collide_points();
-        let joint_lines = physics_state.get_joint_lines();
-        update_frame_physics(rectangles, collide_points, joint_lines, &letterbox);
+        draw_physics(&physics_state, &letterbox);
 
         next_frame().await;
     }
@@ -87,14 +83,9 @@ impl FpsCounter {
     }
 }
 
-fn update_frame_physics(
-    rectangles: Vec<Rectangle>,
-    points: Vec<Point>,
-    lines: Vec<Line>,
-    letterbox: &Letterbox,
-) {
+fn draw_physics(physics: &PhysicsState, letterbox: &Letterbox) {
     let box_border = letterbox.len_to_screen(BOX_BORDER);
-    for r in &rectangles {
+    for r in physics.rectangles() {
         let c = letterbox.to_screen(vec2(r.center.x, r.center.y));
         let (w, h) = (
             letterbox.len_to_screen(r.width),
@@ -115,7 +106,7 @@ fn update_frame_physics(
         draw_rectangle_ex(c.x, c.y, w - box_border, h - box_border, p); //inner
     }
     let point_size = letterbox.len_to_screen(POINT_SIZE);
-    for p in &points {
+    for p in physics.collide_points() {
         let c = letterbox.to_screen(vec2(p.x, p.y));
         let params = DrawRectangleParams {
             color: RED,
@@ -125,7 +116,7 @@ fn update_frame_physics(
         draw_rectangle_ex(c.x, c.y, point_size, point_size, params);
     }
     let line_width = letterbox.len_to_screen(LINE_WIDTH);
-    for l in &lines {
+    for l in physics.joint_lines() {
         let a = letterbox.to_screen(vec2(l.p1.x, l.p1.y));
         let b = letterbox.to_screen(vec2(l.p2.x, l.p2.y));
         draw_line(a.x, a.y, b.x, b.y, line_width, BLACK);
