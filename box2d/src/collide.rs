@@ -75,7 +75,7 @@ fn compute_incident_edge(
     let n_abs = n.abs();
 
     if n_abs.x > n_abs.y {
-        if f32::signum(n.x) > 0.0 {
+        if n.x >= 0.0 {
             c[0].v.set(h.x, -h.y);
             c[0].fp.in_edge2 = EdgeNumbers::Edge3;
             c[0].fp.out_edge2 = EdgeNumbers::Edge4;
@@ -93,7 +93,7 @@ fn compute_incident_edge(
             c[1].fp.out_edge2 = EdgeNumbers::Edge3;
         }
     } else {
-        if f32::signum(n.y) > 0.0 {
+        if n.y >= 0.0 {
             c[0].v.set(h.x, h.y);
             c[0].fp.in_edge2 = EdgeNumbers::Edge4;
             c[0].fp.out_edge2 = EdgeNumbers::Edge1;

@@ -15,6 +15,8 @@ pub struct Joint {
     body2: Rc<RefCell<Body>>,
     pub bias_factor: f32,
     pub softness: f32,
+    // Stiffness and damping; when set, softness and bias follow the step size.
+    spring: Option<(f32, f32)>,
 }
 
 impl Joint {
@@ -46,7 +48,14 @@ impl Joint {
             body2,
             bias_factor: 0.2,
             softness: 0.0,
+            spring: None,
         }
+    }
+
+    /// Soft joint as a spring with stiffness `k` and damping `d`.
+    /// Fixed `softness` and `bias_factor` are valid for one step size only.
+    pub fn set_spring(&mut self, k: f32, d: f32) {
+        self.spring = Some((k, d));
     }
 
     pub fn get_joint_lines(&self) -> [(Vec2, Vec2); 2] {
@@ -63,6 +72,14 @@ impl Joint {
     }
 
     pub fn pre_step(&mut self, inv_dt: f32) {
+        if let Some((k, d)) = self.spring
+            && inv_dt > 0.0
+        {
+            let h = 1.0 / inv_dt;
+            // Soft constraint, Catto GDC 2011: softness multiplies an impulse, hence 1/h.
+            self.softness = 1.0 / (h * (d + h * k));
+            self.bias_factor = h * k / (d + h * k);
+        }
         {
             let body1 = &self.body1.borrow();
             let body2 = &self.body2.borrow();

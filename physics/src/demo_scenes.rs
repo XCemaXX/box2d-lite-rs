@@ -154,7 +154,7 @@ fn init_bridge(state: &mut PhysicsState) {
     //let mut bridge = Vec::new();
 
     // Tuning
-    let (softness, bias_factor) = calc_softness_bias(2.0, 0.7, mass);
+    let (k, d) = calc_spring(2.0, 0.7, mass);
 
     let mut prev_body = floor.clone();
     for i in 0..count {
@@ -162,9 +162,7 @@ fn init_bridge(state: &mut PhysicsState) {
         let cur_body = state.add_body(W, H, mass, pos_x, pos_y);
         let pos_x = pos_x - W / 2.0;
         let joint = state.add_joint(prev_body, cur_body.clone(), pos_x, pos_y);
-        let mut joint = joint.borrow_mut();
-        joint.softness = softness;
-        joint.bias_factor = bias_factor;
+        joint.borrow_mut().set_spring(k, d);
         prev_body = cur_body;
     }
     let joint = state.add_joint(
@@ -173,9 +171,7 @@ fn init_bridge(state: &mut PhysicsState) {
         start_x + (count - 1) as f32 * (W + extra_space) + W / 2.0,
         pos_y,
     );
-    let mut joint = joint.borrow_mut();
-    joint.softness = softness;
-    joint.bias_factor = bias_factor;
+    joint.borrow_mut().set_spring(k, d);
 }
 
 fn init_multi_pendulum(state: &mut PhysicsState) {
@@ -188,7 +184,7 @@ fn init_multi_pendulum(state: &mut PhysicsState) {
     let pos_y = FLOOR_Y + W / 2.0 + 1.2;
     let mass = 50.0;
     // Tuning
-    let (softness, bias_factor) = calc_softness_bias(4.0, 0.7, mass);
+    let (k, d) = calc_spring(4.0, 0.7, mass);
 
     let mut prev_body = floor;
     for i in 0..count {
@@ -196,9 +192,7 @@ fn init_multi_pendulum(state: &mut PhysicsState) {
         let cur_body = state.add_body(W, H, mass, pos_x, pos_y);
         let pos_x = pos_x - W / 2.0;
         let joint = state.add_joint(prev_body.clone(), cur_body.clone(), pos_x, pos_y);
-        let mut joint = joint.borrow_mut();
-        joint.softness = softness;
-        joint.bias_factor = bias_factor;
+        joint.borrow_mut().set_spring(k, d);
         prev_body = cur_body;
     }
 }
@@ -210,16 +204,13 @@ fn init_free_space(state: &mut PhysicsState) {
     let _wall_l = state.add_unmovable_body(FLOOR_H, SCREEN_WIDTH, -1.0, 0.0);
 }
 
-fn calc_softness_bias(frequency_hz: f32, damping_ratio: f32, mass: f32) -> (f32, f32) {
-    // frequency in radians
+/// Spring stiffness and damping for a soft joint.
+fn calc_spring(frequency_hz: f32, damping_ratio: f32, mass: f32) -> (f32, f32) {
     let omega = 2.0 * std::f32::consts::PI * frequency_hz;
-    // damping coefficient
     let d = 2.0 * mass * damping_ratio * omega;
-    // spring stifness
     let k = mass * omega * omega;
-    // magic formulas
-    let time_step = 1.0 / 60.0;
-    let softness = 1.0 / (d + time_step * k);
-    let bias_factor = time_step * k / (d + time_step * k);
-    (softness, bias_factor)
+    // The original demo uses softness = 1/(d + h*k) at h = 1/60. This spring gives
+    // the same joints at 60 Hz and keeps them the same at other step sizes.
+    const ORIGINAL_RATE: f32 = 60.0;
+    (k * ORIGINAL_RATE, d * ORIGINAL_RATE)
 }
