@@ -14,6 +14,10 @@ pub struct PhysicsState {
 
 const SCALE_MULT: f32 = 100.0;
 const GRAVITY: f32 = -500.0;
+// The solver is stable only for small steps.
+const MAX_SUBSTEP_DT: f32 = 1.0 / 60.0;
+// After a long pause (hidden tab, dragged window) drop the lost time, don't simulate it.
+const MAX_SUBSTEPS: u32 = 5;
 
 impl PhysicsState {
     fn add_unmovable_body(&mut self, w: f32, h: f32, pos_x: f32, pos_y: f32) -> Rc<RefCell<Body>> {
@@ -58,8 +62,12 @@ impl PhysicsState {
         state
     }
 
+    /// Advances the world by `dt`, split into equal substeps.
     pub fn step(&mut self, dt: f32) {
-        self.world.step(dt);
+        let (n, h) = substeps(dt);
+        for _ in 0..n {
+            self.world.step(h);
+        }
     }
 
     pub fn get_rectangles(&self) -> Vec<Rectangle> {
@@ -143,5 +151,43 @@ impl std::fmt::Display for PhysicsState {
             demo_scenes::get_scene_name(self.current_scene),
             self.world.bodies_size()
         )
+    }
+}
+
+/// Returns the count and the size of substeps for a frame of `dt`.
+/// Substeps are equal: a tiny last substep makes the contact bias explode.
+fn substeps(dt: f32) -> (u32, f32) {
+    if dt <= 0.0 {
+        return (0, 0.0);
+    }
+    let dt = dt.min(MAX_SUBSTEP_DT * MAX_SUBSTEPS as f32);
+    let n = (dt / MAX_SUBSTEP_DT).ceil() as u32;
+    (n, dt / n as f32)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn frame_120hz_is_one_substep() {
+        assert_eq!(substeps(1.0 / 120.0), (1, 1.0 / 120.0));
+    }
+
+    #[test]
+    fn substeps_are_equal_and_small() {
+        let (n, h) = substeps(0.02);
+        assert_eq!(n, 2);
+        assert!((h - 0.01).abs() < 1e-6);
+    }
+
+    #[test]
+    fn long_pause_is_dropped() {
+        assert_eq!(substeps(10.0), (MAX_SUBSTEPS, MAX_SUBSTEP_DT));
+    }
+
+    #[test]
+    fn no_time_no_steps() {
+        assert_eq!(substeps(0.0).0, 0);
     }
 }
