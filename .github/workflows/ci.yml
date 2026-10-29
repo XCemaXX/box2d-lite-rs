@@ -64,7 +64,7 @@ jobs:
           cp -r gui_macroquad/pkg site/macroquad_version/
           rm -f site/*/pkg/.gitignore
           ls -lR site
-      - uses: actions/upload-pages-artifact@v4
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: site
 
