@@ -2,6 +2,18 @@ use crate::bodies::{Bodies, BodyId};
 use crate::body::Body;
 use crate::math_utils::{Mat22, Vec2};
 use crate::world::{POSITION_CORRECTION, WARM_STARTING};
+
+const RIGID_BIAS_FACTOR: f32 = 0.2;
+/// How a joint holds its two anchors together.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Stiffness {
+    /// The original correction: bias factor 0.2, no softness.
+    Rigid,
+    /// Spring with stiffness `k` and damping `d`, in world units.
+    /// Softness and bias follow the step size, so the joint is the same at any rate.
+    Spring { stiffness: f32, damping: f32 },
+}
+
 pub struct Joint {
     m: Mat22,
     local_anchor1: Vec2,
@@ -12,10 +24,10 @@ pub struct Joint {
     p: Vec2, // accumulated impulse
     body1: BodyId,
     body2: BodyId,
+    stiffness: Stiffness,
+    // Derived from `stiffness` and the step size in `pre_step`.
     bias_factor: f32,
     softness: f32,
-    // Stiffness and damping; when set, softness and bias follow the step size.
-    spring: Option<(f32, f32)>,
 }
 
 impl Joint {
@@ -32,16 +44,14 @@ impl Joint {
             p: Vec2::ZERO, // accumulated impulse
             body1: id1,
             body2: id2,
-            bias_factor: 0.2,
+            stiffness: Stiffness::Rigid,
+            bias_factor: RIGID_BIAS_FACTOR,
             softness: 0.0,
-            spring: None,
         }
     }
 
-    /// Soft joint as a spring with stiffness `k` and damping `d`.
-    /// Fixed `softness` and `bias_factor` are valid for one step size only.
-    pub fn set_spring(&mut self, k: f32, d: f32) {
-        self.spring = Some((k, d));
+    pub fn set_stiffness(&mut self, stiffness: Stiffness) {
+        self.stiffness = stiffness;
     }
 
     pub fn involves(&self, id: BodyId) -> bool {
@@ -63,13 +73,19 @@ impl Joint {
     }
 
     pub(crate) fn pre_step(&mut self, bodies: &mut Bodies, inv_dt: f32) {
-        if let Some((k, d)) = self.spring
-            && inv_dt > 0.0
-        {
-            let h = 1.0 / inv_dt;
-            // Soft constraint, Catto GDC 2011: softness multiplies an impulse, hence 1/h.
-            self.softness = 1.0 / (h * (d + h * k));
-            self.bias_factor = h * k / (d + h * k);
+        match self.stiffness {
+            Stiffness::Rigid => (self.softness, self.bias_factor) = (0.0, RIGID_BIAS_FACTOR),
+            Stiffness::Spring {
+                stiffness: k,
+                damping: d,
+            } if inv_dt > 0.0 => {
+                let h = 1.0 / inv_dt;
+                // Soft constraint, Catto GDC 2011: softness multiplies an impulse, hence 1/h.
+                self.softness = 1.0 / (h * (d + h * k));
+                self.bias_factor = h * k / (d + h * k);
+            }
+            // No time step: keep the last values.
+            Stiffness::Spring { .. } => {}
         }
         let (body1, body2) = bodies.pair_mut(self.body1, self.body2);
 

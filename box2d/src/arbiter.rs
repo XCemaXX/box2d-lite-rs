@@ -29,17 +29,13 @@ impl Arbiter {
     }
 
     pub fn collide_points(&self) -> impl Iterator<Item = Vec2> + '_ {
-        self.contacts.as_slice().iter().map(|c| c.position)
+        self.contacts.iter().map(|c| c.position)
     }
 
     /// Takes the new contacts; contacts with the same feature keep their impulses.
     pub fn update(&mut self, mut contacts: Contacts) {
-        for c in contacts.as_mut_slice() {
-            let old = self
-                .contacts
-                .as_slice()
-                .iter()
-                .find(|old| old.feature == c.feature);
+        for c in contacts.iter_mut() {
+            let old = self.contacts.iter().find(|old| old.feature == c.feature);
             if let Some(old) = old {
                 (c.pn, c.pt, c.pnb) = if WARM_STARTING {
                     (old.pn, old.pt, old.pnb)
@@ -56,7 +52,7 @@ impl Arbiter {
         let k_bias_factor = if POSITION_CORRECTION { 0.2 } else { 0.0 };
         let (body1, body2) = bodies.pair_mut(self.body1, self.body2);
 
-        for c in self.contacts.as_mut_slice() {
+        for c in self.contacts.iter_mut() {
             let r1 = c.position - body1.position;
             let r2 = c.position - body2.position;
 
@@ -92,7 +88,7 @@ impl Arbiter {
     pub fn apply_impulse(&mut self, bodies: &mut Bodies) {
         let (body1, body2) = bodies.pair_mut(self.body1, self.body2);
 
-        for c in self.contacts.as_mut_slice() {
+        for c in self.contacts.iter_mut() {
             let r1 = c.position - body1.position;
             let r2 = c.position - body2.position;
 

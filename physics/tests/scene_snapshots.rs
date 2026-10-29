@@ -13,7 +13,8 @@ const SAMPLE_EVERY: usize = 30;
 fn trace(scene: usize) -> String {
     // Fixed jitter: scenes with random placement are reproducible too.
     let mut jitter = [0.9, -0.4, 0.1, -1.0, 0.6, -0.7].into_iter().cycle();
-    let mut state = PhysicsState::with_jitter(scene, move || jitter.next().unwrap());
+    let mut state = PhysicsState::with_jitter(move || jitter.next().unwrap());
+    state.set_scene(scene).unwrap();
     let mut out = format!("{state}\n");
     for step in 0..=STEPS {
         if step % SAMPLE_EVERY == 0 {
