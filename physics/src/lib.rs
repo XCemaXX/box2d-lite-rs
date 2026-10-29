@@ -1,10 +1,7 @@
 mod demo_scenes;
 pub mod primitives;
 
-use std::cell::RefCell;
-use std::rc::Rc;
-
-use box2d::{Body, Joint, Vec2, World};
+use box2d::{Body, BodyId, Joint, Vec2, World};
 use primitives::{Line, Point, Rectangle};
 
 pub struct PhysicsState {
@@ -21,36 +18,31 @@ const MAX_SUBSTEP_DT: f32 = 1.0 / 60.0;
 const MAX_SUBSTEPS: u32 = 5;
 
 impl PhysicsState {
-    fn add_unmovable_body(&mut self, w: f32, h: f32, pos_x: f32, pos_y: f32) -> Rc<RefCell<Body>> {
-        self.insert_body(Body::new_static(to_world(w, h), to_world(pos_x, pos_y)))
+    fn add_unmovable_body(&mut self, w: f32, h: f32, pos_x: f32, pos_y: f32) -> BodyId {
+        let body = Body::new_static(to_world(w, h), to_world(pos_x, pos_y));
+        self.world.add_body(body)
     }
 
-    fn add_body(&mut self, w: f32, h: f32, mass: f32, pos_x: f32, pos_y: f32) -> Rc<RefCell<Body>> {
-        self.insert_body(Body::new_dynamic(
-            to_world(w, h),
-            mass,
-            to_world(pos_x, pos_y),
-        ))
+    fn add_body(&mut self, w: f32, h: f32, mass: f32, pos_x: f32, pos_y: f32) -> BodyId {
+        let body = Body::new_dynamic(to_world(w, h), mass, to_world(pos_x, pos_y));
+        self.world.add_body(body)
     }
 
-    fn insert_body(&mut self, body: Body) -> Rc<RefCell<Body>> {
-        let body = Rc::new(RefCell::new(body));
-        self.world.add_body(body.clone());
-        body
+    /// Scenes use ids they just created, so the body is always alive.
+    fn body_mut(&mut self, id: BodyId) -> &mut Body {
+        self.world.body_mut(id).expect("scene body is alive")
     }
 
     fn add_joint(
         &mut self,
-        body1: Rc<RefCell<Body>>,
-        body2: Rc<RefCell<Body>>,
+        body1: BodyId,
+        body2: BodyId,
         anchor_x: f32,
         anchor_y: f32,
-    ) -> Rc<RefCell<Joint>> {
-        self.world.add_joint(
-            body1,
-            body2,
-            Vec2::new(anchor_x * SCALE_MULT, anchor_y * SCALE_MULT),
-        )
+    ) -> &mut Joint {
+        self.world
+            .add_joint(body1, body2, to_world(anchor_x, anchor_y))
+            .expect("scene joint links two different live bodies")
     }
 
     /// Scenes without randomness: the same every run.
@@ -97,7 +89,7 @@ impl PhysicsState {
             center: to_point(body.position),
             width: body.width.x / SCALE_MULT,
             height: body.width.y / SCALE_MULT,
-            rotation: body.rotation,
+            rotation: body.rotation.angle(),
         })
     }
 

@@ -150,6 +150,37 @@ impl std::ops::Mul<Vec2> for Mat22 {
     }
 }
 
+/// Angle with its rotation matrix. The matrix is computed once per angle change:
+/// collision needs it for every body pair.
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct Rotation {
+    angle: f32,
+    mat: Mat22,
+}
+
+impl Rotation {
+    pub fn new(angle: f32) -> Self {
+        Self {
+            angle,
+            mat: Mat22::from_angle(angle),
+        }
+    }
+
+    pub fn angle(self) -> f32 {
+        self.angle
+    }
+
+    pub fn mat(self) -> Mat22 {
+        self.mat
+    }
+}
+
+impl Default for Rotation {
+    fn default() -> Self {
+        Self::new(0.0)
+    }
+}
+
 /// Same as `Clamp` in the original. Not `f32::clamp`: it panics when `low > high`
 /// and returns NaN for a NaN input, where this returns `high`.
 pub fn clamp(a: f32, low: f32, high: f32) -> f32 {

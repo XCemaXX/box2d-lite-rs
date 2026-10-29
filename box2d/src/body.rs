@@ -1,8 +1,8 @@
-use crate::math_utils::Vec2;
+use crate::math_utils::{Rotation, Vec2};
 
 pub struct Body {
     pub position: Vec2, // in the middle of body
-    pub rotation: f32,
+    pub rotation: Rotation,
 
     pub velocity: Vec2,
     pub angular_velocity: f32,
@@ -15,8 +15,6 @@ pub struct Body {
     pub friction: f32,
     pub inv_mass: f32,
     pub inv_i: f32,
-
-    pub serial_number: usize, // for arbiter instead of compare addresses
 }
 
 impl Body {
@@ -33,7 +31,7 @@ impl Body {
     fn with_inverse_mass(size: Vec2, position: Vec2, inv_mass: f32, inv_i: f32) -> Self {
         Self {
             position,
-            rotation: 0.0,
+            rotation: Rotation::default(),
             velocity: Vec2::ZERO,
             angular_velocity: 0.0,
             force: Vec2::ZERO,
@@ -42,7 +40,6 @@ impl Body {
             friction: 0.2,
             inv_mass,
             inv_i,
-            serial_number: 0,
         }
     }
 
