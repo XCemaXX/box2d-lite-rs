@@ -139,7 +139,7 @@ pub fn collide(contacts: &mut [Contact; MAX_CONTACT_POINT], body_a: &Body, body_
     let da = rot_at * dp;
     let db = rot_bt * dp;
 
-    let c = rot_a * rot_b;
+    let c = rot_at * rot_b;
     let abs_c = c.abs();
     let abs_ct = abs_c.transpose();
 
@@ -285,4 +285,34 @@ pub fn collide(contacts: &mut [Contact; MAX_CONTACT_POINT], body_a: &Body, body_
     }
 
     num_contacts
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // A box corner pushed into a tilted thin plank. Both bodies are rotated,
+    // so a wrong relative rotation in the SAT test hides the contact.
+    #[test]
+    fn rotated_corner_touches_tilted_plank() {
+        let tilt: f32 = 0.25;
+        let mut plank = Body::new(110.0, 4.0, f32::MAX, 0.0, 0.0);
+        plank.rotation = tilt;
+
+        // Box corner reaches the plank face at normal distance ~8.9.
+        let (along, normal) = (40.0, 8.0);
+        let (sin, cos) = tilt.sin_cos();
+        let mut b = Body::new(
+            10.0,
+            10.0,
+            1.0,
+            along * cos - normal * sin,
+            along * sin + normal * cos,
+        );
+        b.rotation = tilt - 0.56;
+
+        let mut contacts: [Contact; MAX_CONTACT_POINT] = Default::default();
+        assert!(collide(&mut contacts, &plank, &b) > 0);
+        assert!(collide(&mut contacts, &b, &plank) > 0);
+    }
 }
