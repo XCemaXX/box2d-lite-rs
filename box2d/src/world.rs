@@ -74,6 +74,7 @@ impl World {
     pub fn clear(&mut self) {
         self.bodies.clear();
         self.joints.clear();
+        self.arbiters.clear();
     }
 
     pub fn step(&mut self, dt: f32) {

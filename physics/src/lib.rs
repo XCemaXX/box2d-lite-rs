@@ -185,6 +185,21 @@ mod tests {
         assert_eq!(substeps(10.0), (MAX_SUBSTEPS, MAX_SUBSTEP_DT));
     }
 
+    // Soft joints must not depend on the display refresh rate.
+    #[test]
+    fn bridge_sag_does_not_depend_on_step() {
+        const BRIDGE: usize = 6;
+        let sag = |hz: f32| {
+            let mut state = PhysicsState::new(BRIDGE);
+            for _ in 0..(hz as usize * 4) {
+                state.step(1.0 / hz);
+            }
+            let r = state.get_rectangles();
+            r[r.len() / 2].center.y
+        };
+        assert!((sag(60.0) - sag(240.0)).abs() < 0.01);
+    }
+
     #[test]
     fn no_time_no_steps() {
         assert_eq!(substeps(0.0).0, 0);
