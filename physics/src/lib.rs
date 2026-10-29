@@ -4,7 +4,7 @@ pub mod primitives;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use box2d::{Body, Joint, UNMOVABLE_MASS, Vec2, World};
+use box2d::{Body, Joint, Vec2, World};
 use primitives::{Line, Point, Rectangle};
 
 pub struct PhysicsState {
@@ -22,17 +22,19 @@ const MAX_SUBSTEPS: u32 = 5;
 
 impl PhysicsState {
     fn add_unmovable_body(&mut self, w: f32, h: f32, pos_x: f32, pos_y: f32) -> Rc<RefCell<Body>> {
-        self.add_body(w, h, UNMOVABLE_MASS, pos_x, pos_y)
+        self.insert_body(Body::new_static(to_world(w, h), to_world(pos_x, pos_y)))
     }
 
     fn add_body(&mut self, w: f32, h: f32, mass: f32, pos_x: f32, pos_y: f32) -> Rc<RefCell<Body>> {
-        let body = Rc::new(RefCell::new(Body::new(
-            w * SCALE_MULT,
-            h * SCALE_MULT,
+        self.insert_body(Body::new_dynamic(
+            to_world(w, h),
             mass,
-            pos_x * SCALE_MULT,
-            pos_y * SCALE_MULT,
-        )));
+            to_world(pos_x, pos_y),
+        ))
+    }
+
+    fn insert_body(&mut self, body: Body) -> Rc<RefCell<Body>> {
+        let body = Rc::new(RefCell::new(body));
         self.world.add_body(body.clone());
         body
     }
@@ -141,8 +143,12 @@ impl std::fmt::Display for PhysicsState {
 }
 
 fn new_world() -> World {
-    const ITERATIONS: i32 = 10;
+    const ITERATIONS: u32 = 10;
     World::new(Vec2::new(0.0, GRAVITY), ITERATIONS)
+}
+
+fn to_world(x: f32, y: f32) -> Vec2 {
+    Vec2::new(x * SCALE_MULT, y * SCALE_MULT)
 }
 
 fn to_point(v: Vec2) -> Point {

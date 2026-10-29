@@ -1,6 +1,4 @@
-use crate::math_utils::{Vec2, cross_v_v};
-
-pub const UNMOVABLE_MASS: f32 = f32::MAX;
+use crate::math_utils::Vec2;
 
 pub struct Body {
     pub position: Vec2, // in the middle of body
@@ -15,73 +13,51 @@ pub struct Body {
     pub width: Vec2,
 
     pub friction: f32,
-    mass: f32,
     pub inv_mass: f32,
-    i: f32,
     pub inv_i: f32,
 
     pub serial_number: usize, // for arbiter instead of compare addresses
 }
 
-impl Default for Body {
-    fn default() -> Self {
+impl Body {
+    /// Infinite mass: the body never moves.
+    pub fn new_static(size: Vec2, position: Vec2) -> Self {
+        Self::with_inverse_mass(size, position, 0.0, 0.0)
+    }
+
+    pub fn new_dynamic(size: Vec2, mass: f32, position: Vec2) -> Self {
+        let i = mass * (size.x * size.x + size.y * size.y) / 12.0;
+        Self::with_inverse_mass(size, position, 1.0 / mass, 1.0 / i)
+    }
+
+    fn with_inverse_mass(size: Vec2, position: Vec2, inv_mass: f32, inv_i: f32) -> Self {
         Self {
-            position: Default::default(),
+            position,
             rotation: 0.0,
-            velocity: Default::default(),
+            velocity: Vec2::ZERO,
             angular_velocity: 0.0,
-            force: Default::default(),
+            force: Vec2::ZERO,
             torque: 0.0,
-            width: Vec2::new(1.0, 1.0),
-            friction: 0.0,
-            mass: UNMOVABLE_MASS,
-            inv_mass: 0.0,
-            i: UNMOVABLE_MASS,
-            inv_i: 0.0,
+            width: size,
+            friction: 0.2,
+            inv_mass,
+            inv_i,
             serial_number: 0,
         }
     }
-}
 
-impl Body {
-    pub fn new(w: f32, h: f32, mass: f32, pos_x: f32, pos_y: f32) -> Self {
-        let mut body = Self::default();
-        body.set(Vec2::new(w, h), mass);
-        body.position.set(pos_x, pos_y);
-        body
-    }
-
-    pub fn set(&mut self, w: Vec2, m: f32) {
-        self.position.set(0.0, 0.0);
-        self.rotation = 0.0;
-        self.velocity.set(0.0, 0.0);
-        self.angular_velocity = 0.0;
-        self.force.set(0.0, 0.0);
-        self.torque = 0.0;
-        self.friction = 0.2;
-
-        self.width = w;
-        self.mass = m;
-
-        if self.mass < UNMOVABLE_MASS {
-            self.inv_mass = 1.0 / self.mass;
-            self.i = self.mass * (self.width.x * self.width.x + self.width.y * self.width.y) / 12.0;
-            self.inv_i = 1.0 / self.i;
-        } else {
-            self.inv_mass = 0.0;
-            self.i = UNMOVABLE_MASS;
-            self.inv_i = 0.0;
-        }
+    pub fn is_static(&self) -> bool {
+        self.inv_mass == 0.0
     }
 
     pub fn sub_velocity(&mut self, r: Vec2, p: Vec2) {
         self.velocity -= self.inv_mass * p;
-        self.angular_velocity -= self.inv_i * cross_v_v(r, p);
+        self.angular_velocity -= self.inv_i * r.cross(p);
     }
 
     pub fn add_velocity(&mut self, r: Vec2, p: Vec2) {
         self.velocity += self.inv_mass * p;
-        self.angular_velocity += self.inv_i * cross_v_v(r, p);
+        self.angular_velocity += self.inv_i * r.cross(p);
     }
 
     pub fn add_force(&mut self, f: Vec2) {
