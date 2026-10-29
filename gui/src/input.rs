@@ -9,20 +9,11 @@ pub enum Event {
     ChangeToPrevScene,
 }
 
+#[derive(Default)]
 pub struct InputState {
     cursor: CursorState,
     keyboard: KeyBoardState,
     events: Vec<Event>,
-}
-
-impl Default for InputState {
-    fn default() -> Self {
-        Self {
-            cursor: Default::default(),
-            keyboard: Default::default(),
-            events: Vec::new(),
-        }
-    }
 }
 
 impl InputState {
@@ -35,14 +26,14 @@ impl InputState {
         if let Some([x, y]) = self.cursor.pos {
             for (name, b) in BUTTONS {
                 if b.in_button(x, y) {
-                    match name {
-                        &"Prev" => {
+                    match *name {
+                        "Prev" => {
                             self.events.push(Event::ChangeToPrevScene);
                         }
-                        &"Restart" => {
+                        "Restart" => {
                             self.events.push(Event::Restart);
                         }
-                        &"Next" => {
+                        "Next" => {
                             self.events.push(Event::ChangeToNextScene);
                         }
                         _ => {}
@@ -101,17 +92,12 @@ impl CursorState {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 enum KeyLetters {
+    #[default]
     None,
     N,
     P,
-}
-
-impl Default for KeyLetters {
-    fn default() -> Self {
-        Self::None
-    }
 }
 
 #[derive(Debug, Default)]

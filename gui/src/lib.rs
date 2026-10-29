@@ -196,10 +196,12 @@ impl ApplicationHandler for App {
                 render_state.update_frame(letterbox, rectangles, collide_points, joint_lines);
                 render_state.render(letterbox.field(), window.scale_factor() as f32);
             }
-            WindowEvent::MouseInput { state, button, .. } => {
-                if button == MouseButton::Left {
-                    input_state.update_cursor_buttons(state.is_pressed());
-                }
+            WindowEvent::MouseInput {
+                state,
+                button: MouseButton::Left,
+                ..
+            } => {
+                input_state.update_cursor_buttons(state.is_pressed());
             }
             // Positions are in surface pixels, the same space as the letterbox field.
             WindowEvent::CursorMoved { position, .. } => {

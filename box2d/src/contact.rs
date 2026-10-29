@@ -12,19 +12,14 @@ use crate::math_utils::Vec2;
 //   v3 ------ v4
 //        e3
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum EdgeNumbers {
+    #[default]
     NoEdge,
     Edge1,
     Edge2,
     Edge3,
     Edge4,
-}
-
-impl Default for EdgeNumbers {
-    fn default() -> Self {
-        EdgeNumbers::NoEdge
-    }
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]

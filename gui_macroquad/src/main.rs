@@ -150,13 +150,12 @@ fn update_physics_by_input(
             KeyCode::P => {
                 physics_state.change_to_prev_scene();
             }
-            digit => match digit as usize {
-                DIGIT_START..=DIGIT_END => {
+            digit => {
+                if let DIGIT_START..=DIGIT_END = digit as usize {
                     let scene = digit as usize - DIGIT_START;
                     *physics_state = PhysicsState::new(scene);
                 }
-                _ => {}
-            },
+            }
         }
     };
 
