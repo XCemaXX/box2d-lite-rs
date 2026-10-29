@@ -1,12 +1,22 @@
 use physics::primitives::{Point, Rectangle, Triangle};
+
+#[derive(Clone, Copy)]
+pub enum Action {
+    Prev,
+    Restart,
+    Next,
+}
+
 pub struct Button {
     pub rect: Rectangle,
     pub icon: Triangle,
+    pub action: Action,
 }
 
 impl Button {
-    const fn new(center: Point, w: f32, h: f32, icon: Triangle) -> Self {
+    const fn new(center: Point, w: f32, h: f32, icon: Triangle, action: Action) -> Self {
         Button {
+            action,
             rect: Rectangle {
                 center,
                 width: w,
@@ -17,12 +27,13 @@ impl Button {
         }
     }
 
-    const fn new_on_bot_panel(x: f32, icon: Triangle) -> Self {
+    const fn new_on_bot_panel(x: f32, icon: Triangle, action: Action) -> Self {
         Button::new(
             Point { x, y: BUTTON_Y_POS },
             BUTTON_WIDTH,
             BUTTON_HEIGHT,
             icon,
+            action,
         )
     }
 
@@ -35,16 +46,10 @@ impl Button {
     }
 }
 
-pub static BUTTONS: &[(&str, Button)] = &[
-    (
-        "Prev",
-        Button::new_on_bot_panel(-BUTTON_WIDTH, LEFT_TRIANGLE),
-    ),
-    ("Restart", Button::new_on_bot_panel(0.0, TOP_TRIANGLE)),
-    (
-        "Next",
-        Button::new_on_bot_panel(BUTTON_WIDTH, RIGHT_TRIANGLE),
-    ),
+pub static BUTTONS: &[Button] = &[
+    Button::new_on_bot_panel(-BUTTON_WIDTH, LEFT_TRIANGLE, Action::Prev),
+    Button::new_on_bot_panel(0.0, TOP_TRIANGLE, Action::Restart),
+    Button::new_on_bot_panel(BUTTON_WIDTH, RIGHT_TRIANGLE, Action::Next),
 ];
 
 const SCREEN_WH: f32 = 2.0;

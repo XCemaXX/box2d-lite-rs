@@ -5,195 +5,98 @@ use physics::primitives::{Line, Point, Rectangle, Triangle};
 
 const RED_COLOR: [f32; 3] = [1.0, 0.0, 0.0];
 const BLACK_COLOR: [f32; 3] = [0.0, 0.0, 0.0];
+const BOX_CORNER_COLORS: [[f32; 3]; 4] = [
+    [0.5, 0.0, 1.0],
+    [0.9, 1.0, 0.0],
+    [0.0, 0.0, 1.0],
+    [0.0, 0.9, 0.3],
+];
 
-pub fn create_bordered_rectangle(
-    r: Rectangle,
-    index_start: &mut u16,
-    inner_color: &wgpu::Color,
-) -> (Vec<Vertex>, Vec<u16>) {
-    let corners = math::get_corners(&r);
-    const BORDER_WIDTH: f32 = 0.015;
-    let mut r = r;
-    r.width -= BORDER_WIDTH;
-    r.height -= BORDER_WIDTH;
-    let inner_corners = math::get_corners(&r);
-
-    let vertices: Vec<Vertex> = vec![
-        //outer square
-        Vertex {
-            position: corners[0],
-            color: [0.5, 0.0, 1.0],
-        }, // A
-        Vertex {
-            position: corners[1],
-            color: [0.9, 1.0, 0.0],
-        }, // B
-        Vertex {
-            position: corners[2],
-            color: [0.0, 0.0, 1.0],
-        }, // C
-        Vertex {
-            position: corners[3],
-            color: [0.0, 0.9, 0.3],
-        }, // D;
-        //inner square
-        Vertex {
-            position: inner_corners[0],
-            color: color_as_array(inner_color),
-        },
-        Vertex {
-            position: inner_corners[1],
-            color: color_as_array(inner_color),
-        },
-        Vertex {
-            position: inner_corners[2],
-            color: color_as_array(inner_color),
-        },
-        Vertex {
-            position: inner_corners[3],
-            color: color_as_array(inner_color),
-        },
-    ];
-    let i = *index_start;
-    let indices: Vec<u16> = vec![
-        //outer square
-        i,
-        i + 1,
-        i + 3, // A, B, D
-        i + 3,
-        i + 1,
-        i + 2, // D, B, C
-        //inner square
-        i + 4,
-        i + 5,
-        i + 7,
-        i + 7,
-        i + 5,
-        i + 6,
-    ];
-    *index_start += 8;
-    (vertices, indices)
+/// Geometry of one frame. Cleared each frame; the vectors keep their capacity.
+#[derive(Default)]
+pub struct Mesh {
+    pub vertices: Vec<Vertex>,
+    pub indices: Vec<u32>,
 }
 
-pub fn create_rect(r: Rect, index_start: &mut u16, color: &wgpu::Color) -> (Vec<Vertex>, Vec<u16>) {
-    let color = color_as_array(color);
-    let (x0, y0, x1, y1) = (r.x, r.y, r.x + r.w, r.y + r.h);
-    let vertices = vec![
-        Vertex {
-            position: [x0, y0],
-            color,
-        },
-        Vertex {
-            position: [x1, y0],
-            color,
-        },
-        Vertex {
-            position: [x1, y1],
-            color,
-        },
-        Vertex {
-            position: [x0, y1],
-            color,
-        },
-    ];
-    let i = *index_start;
-    let indices = vec![i, i + 1, i + 3, i + 3, i + 1, i + 2];
-    *index_start += 4;
-    (vertices, indices)
-}
+impl Mesh {
+    pub fn clear(&mut self) {
+        self.vertices.clear();
+        self.indices.clear();
+    }
 
-pub fn create_point(p: &Point, index_start: &mut u16) -> (Vec<Vertex>, Vec<u16>) {
-    let (x, y) = (p.x, p.y);
-    const SIZE: f32 = 0.01;
-    let color = RED_COLOR;
-    let vertices: Vec<Vertex> = vec![
-        //outer square
-        Vertex {
-            position: [x, y - SIZE],
-            color,
-        }, // A
-        Vertex {
-            position: [x + SIZE, y - SIZE],
-            color,
-        }, // B
-        Vertex {
-            position: [x + SIZE, y],
-            color,
-        }, // C
-        Vertex {
-            position: [x, y],
-            color,
-        }, // D;
-    ];
-    let i = *index_start;
-    let indices: Vec<u16> = vec![
-        //outer square
-        i,
-        i + 1,
-        i + 3, // A, B, D
-        i + 3,
-        i + 1,
-        i + 2, // D, B, C
-    ];
-    *index_start += 4;
-    (vertices, indices)
-}
+    /// Corners go around the quad, in either direction.
+    fn push_quad(&mut self, corners: [[f32; 2]; 4], colors: [[f32; 3]; 4]) {
+        let base = self.vertices.len() as u32;
+        self.vertices.extend(
+            corners
+                .into_iter()
+                .zip(colors)
+                .map(|(position, color)| Vertex { position, color }),
+        );
+        self.indices.extend([0, 1, 3, 3, 1, 2].map(|i| base + i));
+    }
 
-pub fn create_line(line: &Line, index_start: &mut u16) -> (Vec<Vertex>, Vec<u16>) {
-    const W: f32 = 0.005;
-    let color: [f32; 3] = BLACK_COLOR;
-    let p1 = &line.p1;
-    let p2 = &line.p2;
+    fn push_triangle(&mut self, points: [[f32; 2]; 3], color: [f32; 3]) {
+        let base = self.vertices.len() as u32;
+        self.vertices
+            .extend(points.map(|position| Vertex { position, color }));
+        self.indices.extend([0, 1, 2].map(|i| base + i));
+    }
 
-    let dx = p2.x - p1.x;
-    let dy = p2.y - p1.y;
-    let l = dx.hypot(dy);
-    let u = dx * W * 0.5 / l;
-    let v = dy * W * 0.5 / l;
-    let vertices: Vec<Vertex> = vec![
-        Vertex {
-            position: [p1.x + v, p1.y - u],
-            color,
-        },
-        Vertex {
-            position: [p1.x - v, p1.y + u],
-            color,
-        },
-        Vertex {
-            position: [p2.x - v, p2.y + u],
-            color,
-        },
-        Vertex {
-            position: [p2.x + v, p2.y - u],
-            color,
-        },
-    ];
-    let i = *index_start;
-    let indices: Vec<u16> = vec![i + 2, i + 1, i, i + 2, i, i + 3];
-    *index_start += 4;
-    (vertices, indices)
-}
+    pub fn push_rect(&mut self, r: Rect, color: &wgpu::Color) {
+        let (x0, y0, x1, y1) = (r.x, r.y, r.x + r.w, r.y + r.h);
+        let color = color_as_array(color);
+        self.push_quad([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], [color; 4]);
+    }
 
-pub fn create_triangle(t: &Triangle, index_start: &mut u16) -> (Vec<Vertex>, Vec<u16>) {
-    let color = BLACK_COLOR;
-    let vertices: Vec<Vertex> = vec![
-        Vertex {
-            position: t.p1.into(),
-            color,
-        }, // A
-        Vertex {
-            position: t.p2.into(),
-            color,
-        }, // B
-        Vertex {
-            position: t.p3.into(),
-            color,
-        }, // C
-    ];
-    let i = *index_start;
-    let indices: Vec<u16> = vec![i, i + 1, i + 2];
-    *index_start += 3;
-    (vertices, indices)
+    pub fn push_bordered_rectangle(&mut self, r: &Rectangle, inner_color: &wgpu::Color) {
+        const BORDER_WIDTH: f32 = 0.015;
+        self.push_quad(math::get_corners(r), BOX_CORNER_COLORS);
+        let inner = Rectangle {
+            width: r.width - BORDER_WIDTH,
+            height: r.height - BORDER_WIDTH,
+            ..r.clone()
+        };
+        self.push_quad(math::get_corners(&inner), [color_as_array(inner_color); 4]);
+    }
+
+    pub fn push_point(&mut self, p: &Point) {
+        const SIZE: f32 = 0.01;
+        let (x, y) = (p.x, p.y);
+        self.push_quad(
+            [[x, y - SIZE], [x + SIZE, y - SIZE], [x + SIZE, y], [x, y]],
+            [RED_COLOR; 4],
+        );
+    }
+
+    pub fn push_line(&mut self, line: &Line) {
+        const W: f32 = 0.005;
+        let (p1, p2) = (&line.p1, &line.p2);
+        let (dx, dy) = (p2.x - p1.x, p2.y - p1.y);
+        let l = dx.hypot(dy);
+        let u = dx * W * 0.5 / l;
+        let v = dy * W * 0.5 / l;
+        self.push_quad(
+            [
+                [p1.x + v, p1.y - u],
+                [p1.x - v, p1.y + u],
+                [p2.x - v, p2.y + u],
+                [p2.x + v, p2.y - u],
+            ],
+            [BLACK_COLOR; 4],
+        );
+    }
+
+    pub fn push_icon(&mut self, t: &Triangle) {
+        self.push_triangle([t.p1.into(), t.p2.into(), t.p3.into()], BLACK_COLOR);
+    }
+
+    pub fn map_positions(&mut self, f: impl Fn([f32; 2]) -> [f32; 2]) {
+        for v in &mut self.vertices {
+            v.position = f(v.position);
+        }
+    }
 }
 
 fn color_as_array(color: &wgpu::Color) -> [f32; 3] {
