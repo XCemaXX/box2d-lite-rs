@@ -223,12 +223,7 @@ impl Running {
             format!("fps: {fps:.1}\n{physics}\n{controls}")
         };
 
-        self.render.update_frame(
-            &self.letterbox,
-            &physics.get_rectangles(),
-            &physics.get_collide_points(),
-            &physics.get_joint_lines(),
-        );
+        self.render.update_frame(&self.letterbox, physics);
         let scale_factor = self.window.scale_factor() as f32;
         self.render
             .render(self.letterbox.field(), scale_factor, &text);

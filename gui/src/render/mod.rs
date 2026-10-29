@@ -14,7 +14,7 @@ use crate::buttons::BUTTONS;
 use crate::letterbox::{Letterbox, Rect};
 use draw_primitives::Mesh;
 use gpu_buffer::GpuBuffer;
-use physics::primitives::{Line, Point, Rectangle};
+use physics::PhysicsState;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
@@ -175,13 +175,7 @@ impl<'a> Render<'a> {
         self.queue.present(frame);
     }
 
-    pub fn update_frame(
-        &mut self,
-        letterbox: &Letterbox,
-        rectangles: &[Rectangle],
-        points: &[Point],
-        lines: &[Line],
-    ) {
+    pub fn update_frame(&mut self, letterbox: &Letterbox, physics: &PhysicsState) {
         let mesh = &mut self.mesh;
         mesh.clear();
         mesh.push_rect(letterbox.world(), &GRAY_BACKGROUND);
@@ -189,14 +183,14 @@ impl<'a> Render<'a> {
             mesh.push_bordered_rectangle(&b.rect, &GRAY_BUTTON);
             mesh.push_icon(&b.icon);
         }
-        for r in rectangles {
-            mesh.push_bordered_rectangle(r, &GRAY_BACKGROUND);
+        for r in physics.rectangles() {
+            mesh.push_bordered_rectangle(&r, &GRAY_BACKGROUND);
         }
-        for p in points {
-            mesh.push_point(p);
+        for p in physics.collide_points() {
+            mesh.push_point(&p);
         }
-        for l in lines {
-            mesh.push_line(l);
+        for l in physics.joint_lines() {
+            mesh.push_line(&l);
         }
         mesh.map_positions(|p| letterbox.world_to_ndc(p));
 

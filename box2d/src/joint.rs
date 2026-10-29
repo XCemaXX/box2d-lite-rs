@@ -58,7 +58,7 @@ impl Joint {
         self.spring = Some((k, d));
     }
 
-    pub fn get_joint_lines(&self) -> [(Vec2, Vec2); 2] {
+    pub fn lines(&self) -> [(Vec2, Vec2); 2] {
         let b1 = self.body1.borrow();
         let b2 = self.body2.borrow();
         let r1 = Mat22::from_angle(b1.rotation);

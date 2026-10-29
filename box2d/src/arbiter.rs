@@ -42,15 +42,10 @@ impl Arbiter {
         )
     }
 
-    pub fn get_collide_points(&self) -> Vec<Vec2> {
-        let mut res = Vec::new();
-        for i in 0..self.num_contacts {
-            res.push(Vec2::new(
-                self.contacts[i].position.x,
-                self.contacts[i].position.y,
-            ));
-        }
-        res
+    pub fn collide_points(&self) -> impl Iterator<Item = Vec2> + '_ {
+        self.contacts[..self.num_contacts]
+            .iter()
+            .map(|c| c.position)
     }
 
     pub fn update(&mut self, other: &Self) {
