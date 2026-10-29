@@ -125,8 +125,8 @@ pub fn collide(body_a: &Body, body_b: &Body) -> Contacts {
     let pos_a = body_a.position;
     let pos_b = body_b.position;
 
-    let rot_a = Mat22::from_angle(body_a.rotation);
-    let rot_b = Mat22::from_angle(body_b.rotation);
+    let rot_a = body_a.rotation.mat();
+    let rot_b = body_b.rotation.mat();
 
     let rot_at = rot_a.transpose();
     let rot_bt = rot_b.transpose();
@@ -288,6 +288,7 @@ pub fn collide(body_a: &Body, body_b: &Body) -> Contacts {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::math_utils::Rotation;
 
     // A box corner pushed into a tilted thin plank. Both bodies are rotated,
     // so a wrong relative rotation in the SAT test hides the contact.
@@ -295,14 +296,14 @@ mod tests {
     fn rotated_corner_touches_tilted_plank() {
         let tilt: f32 = 0.25;
         let mut plank = Body::new_static(Vec2::new(110.0, 4.0), Vec2::ZERO);
-        plank.rotation = tilt;
+        plank.rotation = Rotation::new(tilt);
 
         // Box corner reaches the plank face at normal distance ~8.9.
         let (along, normal) = (40.0, 8.0);
         let (sin, cos) = tilt.sin_cos();
         let position = Vec2::new(along * cos - normal * sin, along * sin + normal * cos);
         let mut b = Body::new_dynamic(Vec2::new(10.0, 10.0), 1.0, position);
-        b.rotation = tilt - 0.56;
+        b.rotation = Rotation::new(tilt - 0.56);
 
         assert!(!collide(&plank, &b).is_empty());
         assert!(!collide(&b, &plank).is_empty());

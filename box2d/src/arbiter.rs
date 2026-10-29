@@ -1,36 +1,36 @@
+use crate::bodies::{Bodies, BodyId};
 use crate::body::Body;
 use crate::collide::collide;
 use crate::contact::Contacts;
 use crate::math_utils::{Vec2, clamp};
 use crate::world::{ACCUMULATE_IMPULSES, POSITION_CORRECTION, WARM_STARTING};
-use std::cell::RefCell;
-use std::rc::Rc;
 
 pub struct Arbiter {
     contacts: Contacts,
-    body1: Rc<RefCell<Body>>,
-    body2: Rc<RefCell<Body>>,
+    body1: BodyId,
+    body2: BodyId,
     // Combined friction
     friction: f32,
 }
 
 impl Arbiter {
-    pub fn new(b1: Rc<RefCell<Body>>, b2: Rc<RefCell<Body>>) -> Self {
-        let (body1, body2) = if b1.borrow().serial_number < b2.borrow().serial_number {
-            (b1, b2)
-        } else {
-            (b2, b1)
-        };
-        let (contacts, friction) = {
-            let (b1, b2) = (body1.borrow(), body2.borrow());
-            (collide(&b1, &b2), f32::sqrt(b1.friction * b2.friction))
-        };
+    /// `id1 < id2`: the order defines the contact normal.
+    pub fn new(id1: BodyId, b1: &Body, id2: BodyId, b2: &Body) -> Self {
+        debug_assert!(id1 < id2);
         Self {
-            contacts,
-            body1,
-            body2,
-            friction,
+            contacts: collide(b1, b2),
+            body1: id1,
+            body2: id2,
+            friction: f32::sqrt(b1.friction * b2.friction),
         }
+    }
+
+    pub fn key(&self) -> (BodyId, BodyId) {
+        (self.body1, self.body2)
+    }
+
+    pub fn involves(&self, id: BodyId) -> bool {
+        self.body1 == id || self.body2 == id
     }
 
     pub fn has_contacts(&self) -> bool {
@@ -61,15 +61,13 @@ impl Arbiter {
         self.contacts = merged;
     }
 
-    pub fn pre_step(&mut self, inv_dt: f32) {
+    pub fn pre_step(&mut self, bodies: &mut Bodies, inv_dt: f32) {
         const K_ALLOWED_PENETRATION: f32 = 0.01;
         let k_bias_factor = if POSITION_CORRECTION { 0.2 } else { 0.0 };
+        let (body1, body2) = bodies.pair_mut(self.body1, self.body2);
 
         for c in self.contacts.as_mut_slice() {
             let (tangent, r1, r2) = {
-                let body1 = self.body1.borrow();
-                let body2 = self.body2.borrow();
-
                 let r1 = c.position - body1.position;
                 let r2 = c.position - body2.position;
 
@@ -99,17 +97,16 @@ impl Arbiter {
             if ACCUMULATE_IMPULSES {
                 // Apply normal + friction impulse
                 let p = (c.pn * c.normal) + (c.pt * tangent);
-                self.body1.borrow_mut().sub_velocity(r1, p);
-                self.body2.borrow_mut().add_velocity(r2, p);
+                body1.sub_velocity(r1, p);
+                body2.add_velocity(r2, p);
             }
         }
     }
 
-    pub fn apply_impulse(&mut self) {
+    pub fn apply_impulse(&mut self, bodies: &mut Bodies) {
+        let (body1, body2) = bodies.pair_mut(self.body1, self.body2);
         for c in self.contacts.as_mut_slice() {
             let (dpn, pn) = {
-                let body1 = self.body1.borrow();
-                let body2 = self.body2.borrow();
                 c.r1 = c.position - body1.position;
                 c.r2 = c.position - body2.position;
 
@@ -133,12 +130,10 @@ impl Arbiter {
                 // Apply contact impulse
                 (dpn, dpn * c.normal)
             };
-            self.body1.borrow_mut().sub_velocity(c.r1, pn);
-            self.body2.borrow_mut().add_velocity(c.r2, pn);
+            body1.sub_velocity(c.r1, pn);
+            body2.add_velocity(c.r2, pn);
 
             let pt = {
-                let body1 = self.body1.borrow();
-                let body2 = self.body2.borrow();
                 // Relative velocity at contact
                 let dv = (body2.velocity + Vec2::scalar_cross(body2.angular_velocity, c.r2))
                     - (body1.velocity + Vec2::scalar_cross(body1.angular_velocity, c.r1));
@@ -162,15 +157,8 @@ impl Arbiter {
                 // Apply contact impulse
                 dpt * tangent
             };
-            self.body1.borrow_mut().sub_velocity(c.r1, pt);
-            self.body2.borrow_mut().add_velocity(c.r2, pt);
+            body1.sub_velocity(c.r1, pt);
+            body2.add_velocity(c.r2, pt);
         }
-    }
-
-    pub fn get_key(&self) -> (usize, usize) {
-        (
-            self.body1.borrow().serial_number,
-            self.body2.borrow().serial_number,
-        )
     }
 }

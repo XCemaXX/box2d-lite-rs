@@ -1,4 +1,5 @@
 use crate::PhysicsState;
+use box2d::Rotation;
 
 type InitDemoScene = fn(&mut PhysicsState);
 const DEMO_SCENES: &[(&str, InitDemoScene)] = &[
@@ -55,11 +56,11 @@ fn init_simple_pendulum(state: &mut PhysicsState) {
 
 fn init_varying_friction_coefficients(state: &mut PhysicsState) {
     let slide = state.add_unmovable_body(1.1, 0.04, -0.2, FLOOR_Y + 1.25);
-    slide.borrow_mut().rotation = -0.25;
+    state.body_mut(slide).rotation = Rotation::new(-0.25);
     let slide = state.add_unmovable_body(1.1, 0.04, 0.05, FLOOR_Y + 0.75);
-    slide.borrow_mut().rotation = 0.25;
+    state.body_mut(slide).rotation = Rotation::new(0.25);
     let slide = state.add_unmovable_body(1.1, 0.04, -0.25, FLOOR_Y + 0.25);
-    slide.borrow_mut().rotation = -0.25;
+    state.body_mut(slide).rotation = Rotation::new(-0.25);
 
     let _wall = state.add_unmovable_body(0.04, 0.3, 0.55, FLOOR_Y + 1.05);
     let _wall = state.add_unmovable_body(0.04, 0.3, -0.75, FLOOR_Y + 0.55);
@@ -67,7 +68,7 @@ fn init_varying_friction_coefficients(state: &mut PhysicsState) {
     let friction = [0.75, 0.5, 0.35, 0.1, 0.0];
     for (i, friction) in friction.into_iter().enumerate() {
         let body = state.add_body(0.1, 0.1, 150.0, -0.65 + i as f32 * 0.15, FLOOR_Y + 1.65);
-        body.borrow_mut().friction = friction;
+        state.body_mut(body).friction = friction;
     }
 
     let _floor = state.add_unmovable_body(SCREEN_WIDTH, FLOOR_H, 0.0, FLOOR_Y_CENTER);
@@ -148,22 +149,23 @@ fn init_bridge(state: &mut PhysicsState) {
     // Tuning
     let (k, d) = calc_spring(2.0, 0.7, mass);
 
-    let mut prev_body = floor.clone();
+    let mut prev_body = floor;
     for i in 0..count {
         let pos_x = start_x + i as f32 * (W + extra_space);
         let cur_body = state.add_body(W, H, mass, pos_x, pos_y);
         let pos_x = pos_x - W / 2.0;
-        let joint = state.add_joint(prev_body, cur_body.clone(), pos_x, pos_y);
-        joint.borrow_mut().set_spring(k, d);
+        state
+            .add_joint(prev_body, cur_body, pos_x, pos_y)
+            .set_spring(k, d);
         prev_body = cur_body;
     }
     let joint = state.add_joint(
-        floor.clone(),
-        prev_body.clone(),
+        floor,
+        prev_body,
         start_x + (count - 1) as f32 * (W + extra_space) + W / 2.0,
         pos_y,
     );
-    joint.borrow_mut().set_spring(k, d);
+    joint.set_spring(k, d);
 }
 
 fn init_multi_pendulum(state: &mut PhysicsState) {
@@ -183,8 +185,9 @@ fn init_multi_pendulum(state: &mut PhysicsState) {
         let pos_x = start_x + i as f32 * (W + extra_space);
         let cur_body = state.add_body(W, H, mass, pos_x, pos_y);
         let pos_x = pos_x - W / 2.0;
-        let joint = state.add_joint(prev_body.clone(), cur_body.clone(), pos_x, pos_y);
-        joint.borrow_mut().set_spring(k, d);
+        state
+            .add_joint(prev_body, cur_body, pos_x, pos_y)
+            .set_spring(k, d);
         prev_body = cur_body;
     }
 }
