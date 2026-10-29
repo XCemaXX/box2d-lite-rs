@@ -30,12 +30,10 @@ pub struct Feature {
     pub out_edge2: EdgeNumbers,
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Copy)]
 pub struct Contact {
     pub position: Vec2,
     pub normal: Vec2,
-    pub r1: Vec2,
-    pub r2: Vec2,
     pub separation: f32,
     pub pn: f32,  // accumulated normal impulse
     pub pt: f32,  // accumulated tangent impulse
@@ -49,7 +47,7 @@ pub struct Contact {
 pub const MAX_CONTACT_POINT: usize = 2;
 
 /// Up to `MAX_CONTACT_POINT` contacts of one body pair, without allocation.
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Copy)]
 pub struct Contacts {
     items: [Contact; MAX_CONTACT_POINT],
     len: usize,

@@ -4,7 +4,10 @@ use crate::body::Body;
 use crate::joint::Joint;
 use crate::math_utils::{Rotation, Vec2};
 
+use crate::collide::collide;
+
 use std::collections::BTreeMap;
+use std::collections::btree_map::Entry;
 
 pub struct World {
     bodies: Bodies,
@@ -141,17 +144,17 @@ impl World {
                 if b1.is_static() && b2.is_static() {
                     continue;
                 }
-                let new_arb = Arbiter::new(id1, b1, id2, b2);
-                let key = new_arb.key();
-
-                if new_arb.has_contacts() {
-                    if let Some(arb) = self.arbiters.get_mut(&key) {
-                        arb.update(&new_arb);
-                    } else {
-                        self.arbiters.insert(key, new_arb);
-                    }
-                } else {
+                let contacts = collide(b1, b2);
+                let key = (id1, id2);
+                if contacts.is_empty() {
                     self.arbiters.remove(&key);
+                    continue;
+                }
+                match self.arbiters.entry(key) {
+                    Entry::Occupied(mut arb) => arb.get_mut().update(contacts),
+                    Entry::Vacant(slot) => {
+                        slot.insert(Arbiter::new(id1, b1, id2, b2, contacts));
+                    }
                 }
             }
         }

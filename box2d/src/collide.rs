@@ -22,13 +22,14 @@ fn flip(fp: &mut Feature) {
     (fp.out_edge1, fp.out_edge2) = (fp.out_edge2, fp.out_edge1);
 }
 
+/// `None` when fewer than two points are left: the caller needs both.
 fn clip_segment_to_line(
-    v_out: &mut [ClipVertex; MAX_CONTACT_POINT],
     v_in: [ClipVertex; MAX_CONTACT_POINT],
     normal: Vec2,
     offset: f32,
     clip_edge: EdgeNumbers,
-) -> usize {
+) -> Option<[ClipVertex; MAX_CONTACT_POINT]> {
+    let mut v_out = [ClipVertex::default(); MAX_CONTACT_POINT];
     // Start with no output points
     let mut num_out = 0_usize;
     // Calculate the distance of end points to the line
@@ -58,16 +59,16 @@ fn clip_segment_to_line(
         }
         num_out += 1;
     }
-    num_out
+    (num_out == MAX_CONTACT_POINT).then_some(v_out)
 }
 
 fn compute_incident_edge(
-    c: &mut [ClipVertex; MAX_CONTACT_POINT],
     h: Vec2,
     pos: Vec2,
     rot: Mat22,
     normal: Vec2,
-) {
+) -> [ClipVertex; MAX_CONTACT_POINT] {
+    let mut c = [ClipVertex::default(); MAX_CONTACT_POINT];
     // The normal is from the reference box. Convert it
     // to the incident boxe's frame and flip sign.
     let rot_t = rot.transpose();
@@ -114,13 +115,13 @@ fn compute_incident_edge(
 
     c[0].v = pos + (rot * c[0].v);
     c[1].v = pos + (rot * c[1].v);
+    c
 }
 
 pub fn collide(body_a: &Body, body_b: &Body) -> Contacts {
-    let mut contacts = Contacts::default();
     // Setup
-    let h_a = 0.5 * body_a.width;
-    let h_b = 0.5 * body_b.width;
+    let h_a = 0.5 * body_a.size;
+    let h_b = 0.5 * body_b.size;
 
     let pos_a = body_a.position;
     let pos_b = body_b.position;
@@ -142,12 +143,12 @@ pub fn collide(body_a: &Body, body_b: &Body) -> Contacts {
     // Box A faces
     let face_a = (da.abs() - h_a) - (abs_c * h_b);
     if face_a.x > 0.0 || face_a.y > 0.0 {
-        return contacts;
+        return Contacts::default();
     }
     // Box B faces
     let face_b = (db.abs() - (abs_ct * h_a)) - h_b;
     if face_b.x > 0.0 || face_b.y > 0.0 {
-        return contacts;
+        return Contacts::default();
     }
 
     // Find best axis
@@ -180,7 +181,7 @@ pub fn collide(body_a: &Body, body_b: &Body) -> Contacts {
 
     // Setup clipping plane data based on the separating axis
     let (front_normal, side_normal);
-    let mut incident_edge: [ClipVertex; MAX_CONTACT_POINT] = Default::default();
+    let incident_edge;
     let (front, neg_side, pos_side);
     let (neg_edge, pos_edge);
 
@@ -195,7 +196,7 @@ pub fn collide(body_a: &Body, body_b: &Body) -> Contacts {
             pos_side = side + h_a.y;
             neg_edge = EdgeNumbers::Edge3;
             pos_edge = EdgeNumbers::Edge1;
-            compute_incident_edge(&mut incident_edge, h_b, pos_b, rot_b, front_normal);
+            incident_edge = compute_incident_edge(h_b, pos_b, rot_b, front_normal);
         }
         Axis::FaceAY => {
             front_normal = normal;
@@ -206,7 +207,7 @@ pub fn collide(body_a: &Body, body_b: &Body) -> Contacts {
             pos_side = side + h_a.x;
             neg_edge = EdgeNumbers::Edge2;
             pos_edge = EdgeNumbers::Edge4;
-            compute_incident_edge(&mut incident_edge, h_b, pos_b, rot_b, front_normal);
+            incident_edge = compute_incident_edge(h_b, pos_b, rot_b, front_normal);
         }
         Axis::FaceBX => {
             front_normal = -normal;
@@ -217,7 +218,7 @@ pub fn collide(body_a: &Body, body_b: &Body) -> Contacts {
             pos_side = side + h_b.y;
             neg_edge = EdgeNumbers::Edge3;
             pos_edge = EdgeNumbers::Edge1;
-            compute_incident_edge(&mut incident_edge, h_a, pos_a, rot_a, front_normal);
+            incident_edge = compute_incident_edge(h_a, pos_a, rot_a, front_normal);
         }
         Axis::FaceBY => {
             front_normal = -normal;
@@ -228,41 +229,27 @@ pub fn collide(body_a: &Body, body_b: &Body) -> Contacts {
             pos_side = side + h_b.x;
             neg_edge = EdgeNumbers::Edge2;
             pos_edge = EdgeNumbers::Edge4;
-            compute_incident_edge(&mut incident_edge, h_a, pos_a, rot_a, front_normal);
+            incident_edge = compute_incident_edge(h_a, pos_a, rot_a, front_normal);
         }
     };
 
     // clip other face with 5 box planes (1 face plane, 4 edge planes)
-    let mut clip_points1: [ClipVertex; MAX_CONTACT_POINT] = Default::default();
-    let mut clip_points2: [ClipVertex; MAX_CONTACT_POINT] = Default::default();
-
     // Clip to box side 1
-    let np = clip_segment_to_line(
-        &mut clip_points1,
-        incident_edge,
-        -side_normal,
-        neg_side,
-        neg_edge,
-    );
-    if np < 2 {
-        return contacts;
-    }
+    let Some(clip_points1) = clip_segment_to_line(incident_edge, -side_normal, neg_side, neg_edge)
+    else {
+        return Contacts::default();
+    };
 
     // Clip to negative box side 1
-    let np = clip_segment_to_line(
-        &mut clip_points2,
-        clip_points1,
-        side_normal,
-        pos_side,
-        pos_edge,
-    );
-    if np < 2 {
-        return contacts;
-    }
+    let Some(clip_points2) = clip_segment_to_line(clip_points1, side_normal, pos_side, pos_edge)
+    else {
+        return Contacts::default();
+    };
 
     // Now clipPoints2 contains the clipping points.
     // Due to roundoff, it is possible that clipping removes all points.
 
+    let mut contacts = Contacts::default();
     for clip_point in &clip_points2 {
         let separation = front_normal.dot(clip_point.v) - front;
 

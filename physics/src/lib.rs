@@ -73,7 +73,7 @@ impl PhysicsState {
     }
 
     pub fn scene_count() -> usize {
-        demo_scenes::get_scene_amount()
+        demo_scenes::scene_count()
     }
 
     /// Advances the world by `dt`, split into equal substeps.
@@ -87,8 +87,8 @@ impl PhysicsState {
     pub fn rectangles(&self) -> impl Iterator<Item = Rectangle> + '_ {
         self.world.bodies().map(|body| Rectangle {
             center: to_point(body.position),
-            width: body.width.x / SCALE_MULT,
-            height: body.width.y / SCALE_MULT,
+            width: body.size.x / SCALE_MULT,
+            height: body.size.y / SCALE_MULT,
             rotation: body.rotation.angle(),
         })
     }
@@ -113,11 +113,11 @@ impl PhysicsState {
     }
 
     pub fn change_to_next_scene(&mut self) {
-        self.set_scene((self.current_scene + 1) % demo_scenes::get_scene_amount());
+        self.set_scene((self.current_scene + 1) % demo_scenes::scene_count());
     }
 
     pub fn change_to_prev_scene(&mut self) {
-        let count = demo_scenes::get_scene_amount();
+        let count = demo_scenes::scene_count();
         self.set_scene((self.current_scene + count - 1) % count);
     }
 }
@@ -128,7 +128,7 @@ impl std::fmt::Display for PhysicsState {
             f,
             "Scene {}: {}. Bodies: {}",
             self.current_scene + 1,
-            demo_scenes::get_scene_name(self.current_scene),
+            demo_scenes::scene_name(self.current_scene),
             self.world.body_count()
         )
     }

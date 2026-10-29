@@ -12,8 +12,8 @@ pub struct Joint {
     p: Vec2, // accumulated impulse
     body1: BodyId,
     body2: BodyId,
-    pub bias_factor: f32,
-    pub softness: f32,
+    bias_factor: f32,
+    softness: f32,
     // Stiffness and damping; when set, softness and bias follow the step size.
     spring: Option<(f32, f32)>,
 }
@@ -72,55 +72,39 @@ impl Joint {
             self.bias_factor = h * k / (d + h * k);
         }
         let (body1, body2) = bodies.pair_mut(self.body1, self.body2);
-        {
-            // Pre-compute anchors, mass matrix, and bias.
-            self.r1 = body1.rotation.mat() * self.local_anchor1;
-            self.r2 = body2.rotation.mat() * self.local_anchor2;
 
-            // deltaV = deltaV0 + K * impulse
-            // invM = [(1/m1 + 1/m2) * eye(2) - skew(r1) * invI1 * skew(r1) - skew(r2) * invI2 * skew(r2)]
-            //      = [1/m1+1/m2     0    ] + invI1 * [r1.y*r1.y -r1.x*r1.y] + invI2 * [r1.y*r1.y -r1.x*r1.y]
-            //        [    0     1/m1+1/m2]           [-r1.x*r1.y r1.x*r1.x]           [-r1.x*r1.y r1.x*r1.x]
-            let mut k1 = Mat22::default();
-            (k1.col1.x, k1.col2.x) = (body1.inv_mass + body2.inv_mass, 0.0);
-            (k1.col1.y, k1.col2.y) = (0.0, body1.inv_mass + body2.inv_mass);
+        // Pre-compute anchors, mass matrix, and bias.
+        self.r1 = body1.rotation.mat() * self.local_anchor1;
+        self.r2 = body2.rotation.mat() * self.local_anchor2;
 
-            let mut k2 = Mat22::default();
-            (k2.col1.x, k2.col2.x) = (
-                body1.inv_i * self.r1.y * self.r1.y,
-                -body1.inv_i * self.r1.x * self.r1.y,
-            );
-            (k2.col1.y, k2.col2.y) = (
-                -body1.inv_i * self.r1.x * self.r1.y,
-                body1.inv_i * self.r1.x * self.r1.x,
-            );
+        // deltaV = deltaV0 + K * impulse
+        // invM = [(1/m1 + 1/m2) * eye(2) - skew(r1) * invI1 * skew(r1) - skew(r2) * invI2 * skew(r2)]
+        //      = [1/m1+1/m2     0    ] + invI1 * [r1.y*r1.y -r1.x*r1.y] + invI2 * [r1.y*r1.y -r1.x*r1.y]
+        //        [    0     1/m1+1/m2]           [-r1.x*r1.y r1.x*r1.x]           [-r1.x*r1.y r1.x*r1.x]
+        let inv_mass = body1.inv_mass + body2.inv_mass;
+        let k1 = Mat22::new(Vec2::new(inv_mass, 0.0), Vec2::new(0.0, inv_mass));
+        let skew = |inv_i: f32, r: Vec2| {
+            Mat22::new(
+                Vec2::new(inv_i * r.y * r.y, -inv_i * r.x * r.y),
+                Vec2::new(-inv_i * r.x * r.y, inv_i * r.x * r.x),
+            )
+        };
+        let k2 = skew(body1.inv_i, self.r1);
+        let k3 = skew(body2.inv_i, self.r2);
 
-            let mut k3 = Mat22::default();
-            (k3.col1.x, k3.col2.x) = (
-                body2.inv_i * self.r2.y * self.r2.y,
-                -body2.inv_i * self.r2.x * self.r2.y,
-            );
-            (k3.col1.y, k3.col2.y) = (
-                -body2.inv_i * self.r2.x * self.r2.y,
-                body2.inv_i * self.r2.x * self.r2.x,
-            );
+        let mut k = (k1 + k2) + k3;
+        k.col1.x += self.softness;
+        k.col2.y += self.softness;
+        self.m = k.invert();
 
-            let mut k = (k1 + k2) + k3;
-            k.col1.x += self.softness;
-            k.col2.y += self.softness;
-
-            self.m = k.invert();
-
-            let p1 = body1.position + self.r1;
-            let p2 = body2.position + self.r2;
-            let dp = p2 - p1;
-
-            if POSITION_CORRECTION {
-                self.bias = -self.bias_factor * inv_dt * dp;
-            } else {
-                self.bias = Vec2::ZERO;
-            }
-        }
+        let p1 = body1.position + self.r1;
+        let p2 = body2.position + self.r2;
+        let dp = p2 - p1;
+        self.bias = if POSITION_CORRECTION {
+            -self.bias_factor * inv_dt * dp
+        } else {
+            Vec2::ZERO
+        };
 
         if WARM_STARTING {
             // Apply accumulated impulse.
@@ -133,12 +117,9 @@ impl Joint {
 
     pub(crate) fn apply_impulse(&mut self, bodies: &mut Bodies) {
         let (body1, body2) = bodies.pair_mut(self.body1, self.body2);
-        let impulse = {
-            let dv = (body2.velocity + Vec2::scalar_cross(body2.angular_velocity, self.r2))
-                - (body1.velocity + Vec2::scalar_cross(body1.angular_velocity, self.r1));
-
-            self.m * ((self.bias - dv) - (self.softness * self.p))
-        };
+        let dv = (body2.velocity + Vec2::scalar_cross(body2.angular_velocity, self.r2))
+            - (body1.velocity + Vec2::scalar_cross(body1.angular_velocity, self.r1));
+        let impulse = self.m * ((self.bias - dv) - (self.softness * self.p));
 
         body1.sub_velocity(self.r1, impulse);
         body2.add_velocity(self.r2, impulse);
