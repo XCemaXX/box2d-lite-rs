@@ -1,8 +1,21 @@
 mod demo_scenes;
 pub mod primitives;
 
+use std::fmt;
+
 use box2d::{Body, BodyId, Joint, Vec2, World};
 use primitives::{Line, Point, Rectangle};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UnknownScene(pub usize);
+
+impl fmt::Display for UnknownScene {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "no demo scene with index {}", self.0)
+    }
+}
+
+impl std::error::Error for UnknownScene {}
 
 pub struct PhysicsState {
     world: World,
@@ -28,11 +41,6 @@ impl PhysicsState {
         self.world.add_body(body)
     }
 
-    /// Scenes use ids they just created, so the body is always alive.
-    fn body_mut(&mut self, id: BodyId) -> &mut Body {
-        self.world.body_mut(id).expect("scene body is alive")
-    }
-
     fn add_joint(
         &mut self,
         body1: BodyId,
@@ -45,27 +53,35 @@ impl PhysicsState {
             .expect("scene joint links two different live bodies")
     }
 
-    /// Scenes without randomness: the same every run.
-    pub fn new(demo_scene: usize) -> Self {
-        Self::with_jitter(demo_scene, || 0.0)
+    /// Scene 0 without randomness: the same every run.
+    pub fn new() -> Self {
+        Self::with_jitter(|| 0.0)
     }
 
-    /// `jitter` returns a value in `[-1, 1]`; some scenes use it to place bodies.
-    /// It is kept for restarts and scene changes.
-    pub fn with_jitter(demo_scene: usize, jitter: impl FnMut() -> f32 + 'static) -> Self {
+    /// Scene 0. `jitter` returns a value in `[-1, 1]`; some scenes use it to place
+    /// bodies. It is kept for restarts and scene changes.
+    pub fn with_jitter(jitter: impl FnMut() -> f32 + 'static) -> Self {
         let mut state = PhysicsState {
             world: new_world(),
-            current_scene: demo_scene,
+            current_scene: 0,
             jitter: Box::new(jitter),
         };
-        demo_scenes::init_scene(demo_scene, &mut state);
+        state.load_scene(0);
         state
     }
 
-    pub fn set_scene(&mut self, scene: usize) {
+    /// On error the current scene stays.
+    pub fn set_scene(&mut self, scene: usize) -> Result<(), UnknownScene> {
+        let init = demo_scenes::scene(scene).ok_or(UnknownScene(scene))?.init;
         self.world = new_world();
         self.current_scene = scene;
-        demo_scenes::init_scene(scene, self);
+        init(self);
+        Ok(())
+    }
+
+    /// For indices that are known to be valid.
+    fn load_scene(&mut self, scene: usize) {
+        self.set_scene(scene).expect("scene index in range");
     }
 
     fn jitter(&mut self) -> f32 {
@@ -109,26 +125,32 @@ impl PhysicsState {
     }
 
     pub fn restart(&mut self) {
-        self.set_scene(self.current_scene);
+        self.load_scene(self.current_scene);
     }
 
     pub fn change_to_next_scene(&mut self) {
-        self.set_scene((self.current_scene + 1) % demo_scenes::scene_count());
+        self.load_scene((self.current_scene + 1) % demo_scenes::scene_count());
     }
 
     pub fn change_to_prev_scene(&mut self) {
         let count = demo_scenes::scene_count();
-        self.set_scene((self.current_scene + count - 1) % count);
+        self.load_scene((self.current_scene + count - 1) % count);
     }
 }
 
-impl std::fmt::Display for PhysicsState {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Default for PhysicsState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl fmt::Display for PhysicsState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "Scene {}: {}. Bodies: {}",
             self.current_scene + 1,
-            demo_scenes::scene_name(self.current_scene),
+            demo_scenes::scene(self.current_scene).map_or("?", |s| s.name),
             self.world.body_count()
         )
     }
@@ -187,7 +209,8 @@ mod tests {
     fn bridge_sag_does_not_depend_on_step() {
         const BRIDGE: usize = 6;
         let sag = |hz: f32| {
-            let mut state = PhysicsState::new(BRIDGE);
+            let mut state = PhysicsState::new();
+            state.set_scene(BRIDGE).unwrap();
             for _ in 0..(hz as usize * 4) {
                 state.step(1.0 / hz);
             }
@@ -195,6 +218,15 @@ mod tests {
             state.rectangles().nth(n / 2).unwrap().center.y
         };
         assert!((sag(60.0) - sag(240.0)).abs() < 0.01);
+    }
+
+    #[test]
+    fn unknown_scene_keeps_current() {
+        let mut state = PhysicsState::new();
+        state.set_scene(2).unwrap();
+        let count = PhysicsState::scene_count();
+        assert_eq!(state.set_scene(count), Err(UnknownScene(count)));
+        assert_eq!(state.current_scene, 2);
     }
 
     #[test]

@@ -90,7 +90,7 @@ impl App {
             render,
             letterbox,
             input: InputState::default(),
-            physics: PhysicsState::with_jitter(0, || rand::random_range(-1.0..=1.0)),
+            physics: PhysicsState::with_jitter(|| rand::random_range(-1.0..=1.0)),
             last_frame: web_time::Instant::now(),
             fps: FpsCounter::default(),
         });
@@ -241,7 +241,9 @@ fn input_events_to_physics(input_state: &mut InputState, physics_state: &mut Phy
                 physics_state.add_rectangle(x, y);
             }
             RunScene(scene) => {
-                physics_state.set_scene(scene);
+                if let Err(e) = physics_state.set_scene(scene) {
+                    log::warn!("{e}");
+                }
             }
             ChangeToNextScene => {
                 physics_state.change_to_next_scene();

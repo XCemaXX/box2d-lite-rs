@@ -1,10 +1,9 @@
 use crate::body::Body;
-use crate::contact::{Contact, Contacts, EdgeNumbers, Feature, MAX_CONTACT_POINT};
+use crate::contact::{Contact, Contacts, Edge, Feature, MAX_CONTACT_POINT};
 use crate::math_utils::{Mat22, Vec2};
 
-#[derive(Debug, PartialEq, Default)]
+#[derive(Debug, PartialEq)]
 enum Axis {
-    #[default]
     FaceAX,
     FaceAY,
     FaceBX,
@@ -17,17 +16,12 @@ struct ClipVertex {
     fp: Feature,
 }
 
-fn flip(fp: &mut Feature) {
-    (fp.in_edge1, fp.in_edge2) = (fp.in_edge2, fp.in_edge1);
-    (fp.out_edge1, fp.out_edge2) = (fp.out_edge2, fp.out_edge1);
-}
-
 /// `None` when fewer than two points are left: the caller needs both.
 fn clip_segment_to_line(
     v_in: [ClipVertex; MAX_CONTACT_POINT],
     normal: Vec2,
     offset: f32,
-    clip_edge: EdgeNumbers,
+    clip_edge: Edge,
 ) -> Option<[ClipVertex; MAX_CONTACT_POINT]> {
     let mut v_out = [ClipVertex::default(); MAX_CONTACT_POINT];
     // Start with no output points
@@ -50,12 +44,12 @@ fn clip_segment_to_line(
         v_out[num_out].v = v_in[0].v + (interp * (v_in[1].v - v_in[0].v));
         if distance0 > 0.0 {
             v_out[num_out].fp = v_in[0].fp;
-            v_out[num_out].fp.in_edge1 = clip_edge;
-            v_out[num_out].fp.in_edge2 = EdgeNumbers::NoEdge;
+            v_out[num_out].fp.in_edge1 = Some(clip_edge);
+            v_out[num_out].fp.in_edge2 = None;
         } else {
             v_out[num_out].fp = v_in[1].fp;
-            v_out[num_out].fp.out_edge1 = clip_edge;
-            v_out[num_out].fp.out_edge2 = EdgeNumbers::NoEdge;
+            v_out[num_out].fp.out_edge1 = Some(clip_edge);
+            v_out[num_out].fp.out_edge2 = None;
         }
         num_out += 1;
     }
@@ -78,38 +72,38 @@ fn compute_incident_edge(
     if n_abs.x > n_abs.y {
         if n.x >= 0.0 {
             c[0].v = Vec2::new(h.x, -h.y);
-            c[0].fp.in_edge2 = EdgeNumbers::Edge3;
-            c[0].fp.out_edge2 = EdgeNumbers::Edge4;
+            c[0].fp.in_edge2 = Some(Edge::E3);
+            c[0].fp.out_edge2 = Some(Edge::E4);
 
             c[1].v = Vec2::new(h.x, h.y);
-            c[1].fp.in_edge2 = EdgeNumbers::Edge4;
-            c[1].fp.out_edge2 = EdgeNumbers::Edge1;
+            c[1].fp.in_edge2 = Some(Edge::E4);
+            c[1].fp.out_edge2 = Some(Edge::E1);
         } else {
             c[0].v = Vec2::new(-h.x, h.y);
-            c[0].fp.in_edge2 = EdgeNumbers::Edge1;
-            c[0].fp.out_edge2 = EdgeNumbers::Edge2;
+            c[0].fp.in_edge2 = Some(Edge::E1);
+            c[0].fp.out_edge2 = Some(Edge::E2);
 
             c[1].v = Vec2::new(-h.x, -h.y);
-            c[1].fp.in_edge2 = EdgeNumbers::Edge2;
-            c[1].fp.out_edge2 = EdgeNumbers::Edge3;
+            c[1].fp.in_edge2 = Some(Edge::E2);
+            c[1].fp.out_edge2 = Some(Edge::E3);
         }
     } else {
         if n.y >= 0.0 {
             c[0].v = Vec2::new(h.x, h.y);
-            c[0].fp.in_edge2 = EdgeNumbers::Edge4;
-            c[0].fp.out_edge2 = EdgeNumbers::Edge1;
+            c[0].fp.in_edge2 = Some(Edge::E4);
+            c[0].fp.out_edge2 = Some(Edge::E1);
 
             c[1].v = Vec2::new(-h.x, h.y);
-            c[1].fp.in_edge2 = EdgeNumbers::Edge1;
-            c[1].fp.out_edge2 = EdgeNumbers::Edge2;
+            c[1].fp.in_edge2 = Some(Edge::E1);
+            c[1].fp.out_edge2 = Some(Edge::E2);
         } else {
             c[0].v = Vec2::new(-h.x, -h.y);
-            c[0].fp.in_edge2 = EdgeNumbers::Edge2;
-            c[0].fp.out_edge2 = EdgeNumbers::Edge3;
+            c[0].fp.in_edge2 = Some(Edge::E2);
+            c[0].fp.out_edge2 = Some(Edge::E3);
 
             c[1].v = Vec2::new(h.x, -h.y);
-            c[1].fp.in_edge2 = EdgeNumbers::Edge3;
-            c[1].fp.out_edge2 = EdgeNumbers::Edge4;
+            c[1].fp.in_edge2 = Some(Edge::E3);
+            c[1].fp.out_edge2 = Some(Edge::E4);
         }
     }
 
@@ -194,8 +188,8 @@ pub fn collide(body_a: &Body, body_b: &Body) -> Contacts {
             let side = pos_a.dot(side_normal);
             neg_side = -side + h_a.y;
             pos_side = side + h_a.y;
-            neg_edge = EdgeNumbers::Edge3;
-            pos_edge = EdgeNumbers::Edge1;
+            neg_edge = Edge::E3;
+            pos_edge = Edge::E1;
             incident_edge = compute_incident_edge(h_b, pos_b, rot_b, front_normal);
         }
         Axis::FaceAY => {
@@ -205,8 +199,8 @@ pub fn collide(body_a: &Body, body_b: &Body) -> Contacts {
             let side = pos_a.dot(side_normal);
             neg_side = -side + h_a.x;
             pos_side = side + h_a.x;
-            neg_edge = EdgeNumbers::Edge2;
-            pos_edge = EdgeNumbers::Edge4;
+            neg_edge = Edge::E2;
+            pos_edge = Edge::E4;
             incident_edge = compute_incident_edge(h_b, pos_b, rot_b, front_normal);
         }
         Axis::FaceBX => {
@@ -216,8 +210,8 @@ pub fn collide(body_a: &Body, body_b: &Body) -> Contacts {
             let side = pos_b.dot(side_normal);
             neg_side = -side + h_b.y;
             pos_side = side + h_b.y;
-            neg_edge = EdgeNumbers::Edge3;
-            pos_edge = EdgeNumbers::Edge1;
+            neg_edge = Edge::E3;
+            pos_edge = Edge::E1;
             incident_edge = compute_incident_edge(h_a, pos_a, rot_a, front_normal);
         }
         Axis::FaceBY => {
@@ -227,8 +221,8 @@ pub fn collide(body_a: &Body, body_b: &Body) -> Contacts {
             let side = pos_b.dot(side_normal);
             neg_side = -side + h_b.x;
             pos_side = side + h_b.x;
-            neg_edge = EdgeNumbers::Edge2;
-            pos_edge = EdgeNumbers::Edge4;
+            neg_edge = Edge::E2;
+            pos_edge = Edge::E4;
             incident_edge = compute_incident_edge(h_a, pos_a, rot_a, front_normal);
         }
     };
@@ -256,7 +250,7 @@ pub fn collide(body_a: &Body, body_b: &Body) -> Contacts {
         if separation <= 0.0 {
             let mut feature = clip_point.fp;
             if axis == Axis::FaceBX || axis == Axis::FaceBY {
-                flip(&mut feature)
+                feature.flip();
             }
             contacts.push(Contact {
                 separation,

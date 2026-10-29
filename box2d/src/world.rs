@@ -8,6 +8,25 @@ use crate::collide::collide;
 
 use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
+use std::fmt;
+use std::ops::{Index, IndexMut};
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum JointError {
+    SameBody,
+    BodyNotFound(BodyId),
+}
+
+impl fmt::Display for JointError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            JointError::SameBody => write!(f, "a joint needs two different bodies"),
+            JointError::BodyNotFound(id) => write!(f, "body {id:?} is not in the world"),
+        }
+    }
+}
+
+impl std::error::Error for JointError {}
 
 pub struct World {
     bodies: Bodies,
@@ -61,20 +80,19 @@ impl World {
         self.bodies.len()
     }
 
-    /// `None` when an id is not a live body, or both ids are the same body.
-    pub fn add_joint(&mut self, id1: BodyId, id2: BodyId, anchor: Vec2) -> Option<&mut Joint> {
+    pub fn add_joint(
+        &mut self,
+        id1: BodyId,
+        id2: BodyId,
+        anchor: Vec2,
+    ) -> Result<&mut Joint, JointError> {
         if id1 == id2 {
-            return None;
+            return Err(JointError::SameBody);
         }
-        let joint = Joint::new(
-            id1,
-            self.bodies.get(id1)?,
-            id2,
-            self.bodies.get(id2)?,
-            anchor,
-        );
+        let body = |id| self.bodies.get(id).ok_or(JointError::BodyNotFound(id));
+        let joint = Joint::new(id1, body(id1)?, id2, body(id2)?, anchor);
         self.joints.push(joint);
-        self.joints.last_mut()
+        Ok(self.joints.last_mut().expect("just pushed"))
     }
 
     pub fn collide_points(&self) -> impl Iterator<Item = Vec2> + '_ {
@@ -161,6 +179,21 @@ impl World {
     }
 }
 
+/// Panics when the body was removed; `body()` returns `None` instead.
+impl Index<BodyId> for World {
+    type Output = Body;
+
+    fn index(&self, id: BodyId) -> &Body {
+        self.body(id).expect("live body id")
+    }
+}
+
+impl IndexMut<BodyId> for World {
+    fn index_mut(&mut self, id: BodyId) -> &mut Body {
+        self.body_mut(id).expect("live body id")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -173,7 +206,7 @@ mod tests {
             1.0,
             Vec2::new(0.0, 0.9),
         ));
-        assert!(world.add_joint(a, b, Vec2::new(0.0, 2.0)).is_some());
+        assert!(world.add_joint(a, b, Vec2::new(0.0, 2.0)).is_ok());
         world.step(1.0 / 60.0);
         (world, a, b)
     }
@@ -193,8 +226,15 @@ mod tests {
     #[test]
     fn joint_needs_two_live_bodies() {
         let (mut world, a, b) = world_with_joint();
-        assert!(world.add_joint(a, a, Vec2::ZERO).is_none());
+        assert_eq!(
+            world.add_joint(a, a, Vec2::ZERO).err(),
+            Some(JointError::SameBody)
+        );
         world.remove_body(b);
-        assert!(world.add_joint(a, b, Vec2::ZERO).is_none());
+        assert_eq!(
+            world.add_joint(a, b, Vec2::ZERO).err(),
+            Some(JointError::BodyNotFound(b))
+        );
+        assert_eq!(world[a].size, Vec2::new(10.0, 1.0));
     }
 }

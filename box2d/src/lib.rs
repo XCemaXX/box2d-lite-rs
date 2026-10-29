@@ -9,6 +9,6 @@ mod world;
 
 pub use bodies::BodyId;
 pub use body::Body;
-pub use joint::Joint;
+pub use joint::{Joint, Stiffness};
 pub use math_utils::{Rotation, Vec2};
-pub use world::World;
+pub use world::{JointError, World};

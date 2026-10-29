@@ -26,7 +26,7 @@ fn window_conf() -> Conf {
 #[macroquad::main(window_conf)]
 async fn main() {
     rand::srand(miniquad::date::now() as u64);
-    let mut physics_state = PhysicsState::with_jitter(0, || rand::gen_range(-1.0, 1.0));
+    let mut physics_state = PhysicsState::with_jitter(|| rand::gen_range(-1.0, 1.0));
     let mut last_update = get_time();
     let font = load_ttf_font_from_bytes(include_bytes!("../../fonts/DejaVuSans.ttf")).unwrap();
     let mut letterbox = Letterbox::new(Rect::new(-1.0, -1.0, 2.0, 2.0), true);
@@ -145,7 +145,8 @@ fn update_physics_by_input(
             digit => {
                 if let DIGIT_START..=DIGIT_END = digit as usize {
                     let scene = digit as usize - DIGIT_START;
-                    physics_state.set_scene(scene);
+                    // A digit key without a scene does nothing.
+                    let _ = physics_state.set_scene(scene);
                 }
             }
         }

@@ -1,32 +1,56 @@
 use crate::PhysicsState;
-use box2d::Rotation;
+use box2d::{Rotation, Stiffness};
 
-type InitDemoScene = fn(&mut PhysicsState);
-const DEMO_SCENES: &[(&str, InitDemoScene)] = &[
-    ("Two boxes", init_two_boxes_scene),
-    ("Simple pendulum", init_simple_pendulum),
-    (
-        "Varying friction coefficients",
-        init_varying_friction_coefficients,
-    ),
-    ("Vertical stack", init_vertical_stack_scene),
-    ("Pyramid", init_pyramid),
-    ("Teeter", init_teeter),
-    ("Suspension bridge", init_bridge),
-    ("Multi-pendulum", init_multi_pendulum),
-    ("Free space", init_free_space),
-];
-
-pub fn init_scene(scene: usize, state: &mut PhysicsState) {
-    DEMO_SCENES[scene].1(state);
+pub struct Scene {
+    pub name: &'static str,
+    pub init: fn(&mut PhysicsState),
 }
 
-pub fn scene_name(scene: usize) -> &'static str {
-    DEMO_SCENES[scene].0
+const SCENES: &[Scene] = &[
+    Scene {
+        name: "Two boxes",
+        init: init_two_boxes_scene,
+    },
+    Scene {
+        name: "Simple pendulum",
+        init: init_simple_pendulum,
+    },
+    Scene {
+        name: "Varying friction coefficients",
+        init: init_varying_friction_coefficients,
+    },
+    Scene {
+        name: "Vertical stack",
+        init: init_vertical_stack_scene,
+    },
+    Scene {
+        name: "Pyramid",
+        init: init_pyramid,
+    },
+    Scene {
+        name: "Teeter",
+        init: init_teeter,
+    },
+    Scene {
+        name: "Suspension bridge",
+        init: init_bridge,
+    },
+    Scene {
+        name: "Multi-pendulum",
+        init: init_multi_pendulum,
+    },
+    Scene {
+        name: "Free space",
+        init: init_free_space,
+    },
+];
+
+pub fn scene(index: usize) -> Option<&'static Scene> {
+    SCENES.get(index)
 }
 
 pub fn scene_count() -> usize {
-    DEMO_SCENES.len()
+    SCENES.len()
 }
 
 const FLOOR_H: f32 = 0.1;
@@ -56,11 +80,11 @@ fn init_simple_pendulum(state: &mut PhysicsState) {
 
 fn init_varying_friction_coefficients(state: &mut PhysicsState) {
     let slide = state.add_unmovable_body(1.1, 0.04, -0.2, FLOOR_Y + 1.25);
-    state.body_mut(slide).rotation = Rotation::new(-0.25);
+    state.world[slide].rotation = Rotation::new(-0.25);
     let slide = state.add_unmovable_body(1.1, 0.04, 0.05, FLOOR_Y + 0.75);
-    state.body_mut(slide).rotation = Rotation::new(0.25);
+    state.world[slide].rotation = Rotation::new(0.25);
     let slide = state.add_unmovable_body(1.1, 0.04, -0.25, FLOOR_Y + 0.25);
-    state.body_mut(slide).rotation = Rotation::new(-0.25);
+    state.world[slide].rotation = Rotation::new(-0.25);
 
     let _wall = state.add_unmovable_body(0.04, 0.3, 0.55, FLOOR_Y + 1.05);
     let _wall = state.add_unmovable_body(0.04, 0.3, -0.75, FLOOR_Y + 0.55);
@@ -68,7 +92,7 @@ fn init_varying_friction_coefficients(state: &mut PhysicsState) {
     let friction = [0.75, 0.5, 0.35, 0.1, 0.0];
     for (i, friction) in friction.into_iter().enumerate() {
         let body = state.add_body(0.1, 0.1, 150.0, -0.65 + i as f32 * 0.15, FLOOR_Y + 1.65);
-        state.body_mut(body).friction = friction;
+        state.world[body].friction = friction;
     }
 
     let _floor = state.add_unmovable_body(SCREEN_WIDTH, FLOOR_H, 0.0, FLOOR_Y_CENTER);
@@ -147,7 +171,7 @@ fn init_bridge(state: &mut PhysicsState) {
     //let mut bridge = Vec::new();
 
     // Tuning
-    let (k, d) = calc_spring(2.0, 0.7, mass);
+    let spring = calc_spring(2.0, 0.7, mass);
 
     let mut prev_body = floor;
     for i in 0..count {
@@ -156,7 +180,7 @@ fn init_bridge(state: &mut PhysicsState) {
         let pos_x = pos_x - W / 2.0;
         state
             .add_joint(prev_body, cur_body, pos_x, pos_y)
-            .set_spring(k, d);
+            .set_stiffness(spring);
         prev_body = cur_body;
     }
     let joint = state.add_joint(
@@ -165,7 +189,7 @@ fn init_bridge(state: &mut PhysicsState) {
         start_x + (count - 1) as f32 * (W + extra_space) + W / 2.0,
         pos_y,
     );
-    joint.set_spring(k, d);
+    joint.set_stiffness(spring);
 }
 
 fn init_multi_pendulum(state: &mut PhysicsState) {
@@ -178,7 +202,7 @@ fn init_multi_pendulum(state: &mut PhysicsState) {
     let pos_y = FLOOR_Y + W / 2.0 + 1.2;
     let mass = 50.0;
     // Tuning
-    let (k, d) = calc_spring(4.0, 0.7, mass);
+    let spring = calc_spring(4.0, 0.7, mass);
 
     let mut prev_body = floor;
     for i in 0..count {
@@ -187,7 +211,7 @@ fn init_multi_pendulum(state: &mut PhysicsState) {
         let pos_x = pos_x - W / 2.0;
         state
             .add_joint(prev_body, cur_body, pos_x, pos_y)
-            .set_spring(k, d);
+            .set_stiffness(spring);
         prev_body = cur_body;
     }
 }
@@ -200,12 +224,15 @@ fn init_free_space(state: &mut PhysicsState) {
 }
 
 /// Spring stiffness and damping for a soft joint.
-fn calc_spring(frequency_hz: f32, damping_ratio: f32, mass: f32) -> (f32, f32) {
+fn calc_spring(frequency_hz: f32, damping_ratio: f32, mass: f32) -> Stiffness {
     let omega = 2.0 * std::f32::consts::PI * frequency_hz;
     let d = 2.0 * mass * damping_ratio * omega;
     let k = mass * omega * omega;
     // The original demo uses softness = 1/(d + h*k) at h = 1/60. This spring gives
     // the same joints at 60 Hz and keeps them the same at other step sizes.
     const ORIGINAL_RATE: f32 = 60.0;
-    (k * ORIGINAL_RATE, d * ORIGINAL_RATE)
+    Stiffness::Spring {
+        stiffness: k * ORIGINAL_RATE,
+        damping: d * ORIGINAL_RATE,
+    }
 }

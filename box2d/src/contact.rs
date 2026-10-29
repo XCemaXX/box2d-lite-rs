@@ -1,3 +1,5 @@
+use std::ops::{Deref, DerefMut};
+
 use crate::math_utils::Vec2;
 
 // Box vertex and edge numbering:
@@ -12,22 +14,30 @@ use crate::math_utils::Vec2;
 //   v3 ------ v4
 //        e3
 
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
-pub enum EdgeNumbers {
-    #[default]
-    NoEdge,
-    Edge1,
-    Edge2,
-    Edge3,
-    Edge4,
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Edge {
+    E1,
+    E2,
+    E3,
+    E4,
 }
 
+/// Edges that produced a contact point. Contacts with the same feature
+/// in two steps are the same contact.
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub struct Feature {
-    pub in_edge1: EdgeNumbers,
-    pub out_edge1: EdgeNumbers,
-    pub in_edge2: EdgeNumbers,
-    pub out_edge2: EdgeNumbers,
+    pub in_edge1: Option<Edge>,
+    pub out_edge1: Option<Edge>,
+    pub in_edge2: Option<Edge>,
+    pub out_edge2: Option<Edge>,
+}
+
+impl Feature {
+    /// Swaps the roles of the two boxes.
+    pub fn flip(&mut self) {
+        (self.in_edge1, self.in_edge2) = (self.in_edge2, self.in_edge1);
+        (self.out_edge1, self.out_edge2) = (self.out_edge2, self.out_edge1);
+    }
 }
 
 #[derive(Default, Clone, Copy)]
@@ -58,16 +68,18 @@ impl Contacts {
         self.items[self.len] = contact;
         self.len += 1;
     }
+}
 
-    pub fn is_empty(&self) -> bool {
-        self.len == 0
-    }
+impl Deref for Contacts {
+    type Target = [Contact];
 
-    pub fn as_slice(&self) -> &[Contact] {
+    fn deref(&self) -> &[Contact] {
         &self.items[..self.len]
     }
+}
 
-    pub fn as_mut_slice(&mut self) -> &mut [Contact] {
+impl DerefMut for Contacts {
+    fn deref_mut(&mut self) -> &mut [Contact] {
         &mut self.items[..self.len]
     }
 }
