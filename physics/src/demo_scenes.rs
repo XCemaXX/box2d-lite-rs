@@ -1,7 +1,7 @@
 use crate::PhysicsState;
 
 #[cfg(feature = "random")]
-use rand::Rng;
+use rand::RngExt;
 
 type InitDemoScene = fn(&mut PhysicsState);
 const DEMO_SCENES: &'static [(&'static str, InitDemoScene)] = &[

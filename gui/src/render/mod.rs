@@ -105,10 +105,14 @@ impl<'a> Render<'a> {
     }
 
     pub fn render(&mut self) -> () {
-        let frame = self
-            .surface
-            .get_current_texture()
-            .expect("Failed to acquire next swap chain texture");
+        let frame = match self.surface.get_current_texture() {
+            wgpu::CurrentSurfaceTexture::Success(frame)
+            | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
+            other => {
+                log::warn!("Skip frame: {other:?}");
+                return;
+            }
+        };
         let view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
@@ -132,6 +136,7 @@ impl<'a> Render<'a> {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
 
         rpass.set_pipeline(&self.render_pipeline);
@@ -147,7 +152,7 @@ impl<'a> Render<'a> {
         drop(rpass);
 
         self.queue.submit(std::iter::once(encoder.finish()));
-        frame.present();
+        self.queue.present(frame);
     }
 
     pub fn update_frame(
@@ -259,6 +264,7 @@ async fn init_screen<'a>(
             force_fallback_adapter: false,
             // Request an adapter which can render to our surface
             compatible_surface: Some(&surface),
+            apply_limit_buckets: false,
         })
         .await
         .expect("Failed to find an appropriate adapter");
@@ -271,6 +277,7 @@ async fn init_screen<'a>(
             // Make sure we use the texture resolution limits from the adapter, so we can support images the size of the swapchain.
             required_limits: wgpu::Limits::downlevel_webgl2_defaults()
                 .using_resolution(adapter.limits()),
+            experimental_features: wgpu::ExperimentalFeatures::default(),
             memory_hints: wgpu::MemoryHints::default(),
             trace: wgpu::Trace::Off,
         })
@@ -294,7 +301,7 @@ pub fn setup_render(
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
         bind_group_layouts: &[],
-        push_constant_ranges: &[],
+        immediate_size: 0,
     });
 
     //let swapchain_capabilities = surface.get_capabilities(&adapter);
@@ -305,7 +312,7 @@ pub fn setup_render(
         vertex: wgpu::VertexState {
             module: &shader,
             entry_point: Some("vs_main"),
-            buffers: &[Vertex::desc()],
+            buffers: &[Some(Vertex::desc())],
             compilation_options: Default::default(),
         },
         fragment: Some(wgpu::FragmentState {
@@ -328,7 +335,7 @@ pub fn setup_render(
         },
         depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
-        multiview: None,
+        multiview_mask: None,
         cache: None,
     });
     return render_pipeline;
@@ -350,6 +357,7 @@ fn config_surface(
     wgpu::SurfaceConfiguration {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         format: surface_format,
+        color_space: wgpu::SurfaceColorSpace::Auto,
         width: size.width,
         height: size.height,
         present_mode: surface_capabilities.present_modes[0],
