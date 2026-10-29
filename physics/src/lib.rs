@@ -10,6 +10,7 @@ use primitives::{Line, Point, Rectangle};
 pub struct PhysicsState {
     world: World,
     current_scene: usize,
+    jitter: Box<dyn FnMut() -> f32>,
 }
 
 const SCALE_MULT: f32 = 100.0;
@@ -50,15 +51,35 @@ impl PhysicsState {
         )
     }
 
+    /// Scenes without randomness: the same every run.
     pub fn new(demo_scene: usize) -> Self {
-        let gravity = Vec2::new(0.0, GRAVITY);
-        let iterations = 10;
+        Self::with_jitter(demo_scene, || 0.0)
+    }
+
+    /// `jitter` returns a value in `[-1, 1]`; some scenes use it to place bodies.
+    /// It is kept for restarts and scene changes.
+    pub fn with_jitter(demo_scene: usize, jitter: impl FnMut() -> f32 + 'static) -> Self {
         let mut state = PhysicsState {
-            world: World::new(gravity, iterations),
+            world: new_world(),
             current_scene: demo_scene,
+            jitter: Box::new(jitter),
         };
         demo_scenes::init_scene(demo_scene, &mut state);
         state
+    }
+
+    pub fn set_scene(&mut self, scene: usize) {
+        self.world = new_world();
+        self.current_scene = scene;
+        demo_scenes::init_scene(scene, self);
+    }
+
+    fn jitter(&mut self) -> f32 {
+        (self.jitter)().clamp(-1.0, 1.0)
+    }
+
+    pub fn scene_count() -> usize {
+        demo_scenes::get_scene_amount()
     }
 
     /// Advances the world by `dt`, split into equal substeps.
@@ -94,22 +115,16 @@ impl PhysicsState {
     }
 
     pub fn restart(&mut self) {
-        let scene = self.current_scene;
-        *self = PhysicsState::new(scene);
+        self.set_scene(self.current_scene);
     }
 
     pub fn change_to_next_scene(&mut self) {
-        let scene = (self.current_scene + 1) % demo_scenes::get_scene_amount();
-        *self = PhysicsState::new(scene);
+        self.set_scene((self.current_scene + 1) % demo_scenes::get_scene_amount());
     }
 
     pub fn change_to_prev_scene(&mut self) {
-        let scene = if self.current_scene == 0 {
-            demo_scenes::get_scene_amount()
-        } else {
-            self.current_scene
-        };
-        *self = PhysicsState::new(scene - 1);
+        let count = demo_scenes::get_scene_amount();
+        self.set_scene((self.current_scene + count - 1) % count);
     }
 }
 
@@ -123,6 +138,11 @@ impl std::fmt::Display for PhysicsState {
             self.world.body_count()
         )
     }
+}
+
+fn new_world() -> World {
+    const ITERATIONS: i32 = 10;
+    World::new(Vec2::new(0.0, GRAVITY), ITERATIONS)
 }
 
 fn to_point(v: Vec2) -> Point {
