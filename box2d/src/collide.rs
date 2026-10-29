@@ -2,18 +2,13 @@ use crate::body::Body;
 use crate::contact::{Contact, EdgeNumbers, Feature, MAX_CONTACT_POINT};
 use crate::math_utils::{Mat22, Vec2, dot};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Default)]
 enum Axis {
+    #[default]
     FaceAX,
     FaceAY,
     FaceBX,
     FaceBY,
-}
-
-impl Default for Axis {
-    fn default() -> Self {
-        Axis::FaceAX
-    }
 }
 
 #[derive(Debug, Default, Copy, Clone)]
@@ -268,15 +263,15 @@ pub fn collide(contacts: &mut [Contact; MAX_CONTACT_POINT], body_a: &Body, body_
     // Due to roundoff, it is possible that clipping removes all points.
 
     let mut num_contacts = 0_usize;
-    for i in 0..MAX_CONTACT_POINT {
-        let separation = dot(front_normal, clip_points2[i].v) - front;
+    for clip_point in &clip_points2 {
+        let separation = dot(front_normal, clip_point.v) - front;
 
         if separation <= 0.0 {
             contacts[num_contacts].separation = separation;
             contacts[num_contacts].normal = normal;
             // slide contact point onto reference face (easy to cull)
-            contacts[num_contacts].position = clip_points2[i].v - (separation * front_normal);
-            contacts[num_contacts].feature = clip_points2[i].fp;
+            contacts[num_contacts].position = clip_point.v - (separation * front_normal);
+            contacts[num_contacts].feature = clip_point.fp;
             if axis == Axis::FaceBX || axis == Axis::FaceBY {
                 flip(&mut contacts[num_contacts].feature)
             }

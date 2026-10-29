@@ -261,10 +261,10 @@ fn init_text<'a>(
     config: &wgpu::SurfaceConfiguration,
 ) -> TextBrush<FontRef<'a>> {
     let font: &[u8] = include_bytes!("../../../fonts/DejaVuSans.ttf");
-    return BrushBuilder::using_font_bytes(font)
+    BrushBuilder::using_font_bytes(font)
         .unwrap()
         /* .initial_cache_size((16_384, 16_384))) */ // use this to avoid resizing cache texture
-        .build(&device, config.width, config.height, config.format);
+        .build(device, config.width, config.height, config.format)
 }
 
 fn init_vertices(device: &wgpu::Device) -> (wgpu::Buffer, wgpu::Buffer, Vec<Vertex>, Vec<u16>) {
@@ -279,7 +279,7 @@ fn init_vertices(device: &wgpu::Device) -> (wgpu::Buffer, wgpu::Buffer, Vec<Vert
         contents: bytemuck::cast_slice(&i),
         usage: wgpu::BufferUsages::INDEX,
     });
-    return (vertex_buffer, index_buffer, v, i);
+    (vertex_buffer, index_buffer, v, i)
 }
 
 async fn init_screen<'a>(
@@ -314,7 +314,7 @@ async fn init_screen<'a>(
         })
         .await
         .expect("Failed to create device");
-    return (surface, adapter, device, queue);
+    (surface, adapter, device, queue)
 }
 
 pub fn setup_render(
@@ -337,7 +337,7 @@ pub fn setup_render(
 
     //let swapchain_capabilities = surface.get_capabilities(&adapter);
 
-    let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: None,
         layout: Some(&pipeline_layout),
         vertex: wgpu::VertexState {
@@ -368,8 +368,7 @@ pub fn setup_render(
         multisample: wgpu::MultisampleState::default(),
         multiview_mask: None,
         cache: None,
-    });
-    return render_pipeline;
+    })
 }
 
 fn config_surface(
@@ -377,7 +376,7 @@ fn config_surface(
     adapter: &wgpu::Adapter,
     size: &Size,
 ) -> wgpu::SurfaceConfiguration {
-    let surface_capabilities = surface.get_capabilities(&adapter);
+    let surface_capabilities = surface.get_capabilities(adapter);
     let surface_format = surface_capabilities
         .formats
         .iter()

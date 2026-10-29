@@ -30,8 +30,8 @@ impl World {
         }
     }
 
-    pub fn get_bodies<'a>(&'a self) -> &'a Vec<Rc<RefCell<Body>>> {
-        return &self.bodies;
+    pub fn get_bodies(&self) -> &Vec<Rc<RefCell<Body>>> {
+        &self.bodies
     }
 
     pub fn bodies_size(&self) -> usize {
@@ -40,7 +40,7 @@ impl World {
 
     pub fn get_collide_points(&self) -> Vec<Vec2> {
         let mut res = Vec::new();
-        for (_, arb) in &self.arbiters {
+        for arb in self.arbiters.values() {
             res.extend(arb.get_collide_points().iter());
         }
         res
@@ -96,7 +96,7 @@ impl World {
         }
 
         // Perform pre-steps.
-        for (_, arb) in &mut self.arbiters {
+        for arb in self.arbiters.values_mut() {
             arb.pre_step(inv_dt);
         }
 
@@ -107,7 +107,7 @@ impl World {
 
         // Perform iterations
         for _ in 0..self.iterations {
-            for (_, arb) in &mut self.arbiters {
+            for arb in self.arbiters.values_mut() {
                 arb.apply_impulse();
             }
             for joint in &mut self.joints {

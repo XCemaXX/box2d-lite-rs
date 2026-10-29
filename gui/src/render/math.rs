@@ -53,9 +53,9 @@ impl std::ops::Add for Vec2 {
     }
 }
 
-impl Into<[f32; 2]> for Vec2 {
-    fn into(self) -> [f32; 2] {
-        [self.x, self.y]
+impl From<Vec2> for [f32; 2] {
+    fn from(val: Vec2) -> Self {
+        [val.x, val.y]
     }
 }
 

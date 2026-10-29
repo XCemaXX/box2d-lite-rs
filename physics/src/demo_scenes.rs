@@ -4,7 +4,7 @@ use crate::PhysicsState;
 use rand::RngExt;
 
 type InitDemoScene = fn(&mut PhysicsState);
-const DEMO_SCENES: &'static [(&'static str, InitDemoScene)] = &[
+const DEMO_SCENES: &[(&str, InitDemoScene)] = &[
     ("Two boxes", init_two_boxes_scene),
     ("Simple pendulum", init_simple_pendulum),
     (
@@ -68,9 +68,9 @@ fn init_varying_friction_coefficients(state: &mut PhysicsState) {
     let _wall = state.add_unmovable_body(0.04, 0.3, -0.75, FLOOR_Y + 0.55);
 
     let friction = [0.75, 0.5, 0.35, 0.1, 0.0];
-    for i in 0..5 {
+    for (i, friction) in friction.into_iter().enumerate() {
         let body = state.add_body(0.1, 0.1, 150.0, -0.65 + i as f32 * 0.15, FLOOR_Y + 1.65);
-        body.borrow_mut().friction = friction[i];
+        body.borrow_mut().friction = friction;
     }
 
     let _floor = state.add_unmovable_body(SCREEN_WIDTH, FLOOR_H, 0.0, FLOOR_Y_CENTER);

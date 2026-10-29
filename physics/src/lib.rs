@@ -43,12 +43,11 @@ impl PhysicsState {
         anchor_x: f32,
         anchor_y: f32,
     ) -> Rc<RefCell<Joint>> {
-        let joint = self.world.add_joint(
+        self.world.add_joint(
             body1,
             body2,
             Vec2::new(anchor_x * SCALE_MULT, anchor_y * SCALE_MULT),
-        );
-        joint
+        )
     }
 
     pub fn new(demo_scene: usize) -> Self {

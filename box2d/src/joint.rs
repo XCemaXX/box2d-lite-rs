@@ -42,8 +42,8 @@ impl Joint {
             r2: Vec2::default(),
             bias: Vec2::default(),
             p: Vec2::default(), // accumulated impulse
-            body1: body1,
-            body2: body2,
+            body1,
+            body2,
             bias_factor: 0.2,
             softness: 0.0,
         }

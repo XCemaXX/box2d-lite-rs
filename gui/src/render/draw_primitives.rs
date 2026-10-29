@@ -57,7 +57,7 @@ pub fn create_bordered_rectangle(
     let i = *index_start;
     let indices: Vec<u16> = vec![
         //outer square
-        i + 0,
+        i,
         i + 1,
         i + 3, // A, B, D
         i + 3,
@@ -72,7 +72,7 @@ pub fn create_bordered_rectangle(
         i + 6,
     ];
     *index_start += 8;
-    return (vertices, indices);
+    (vertices, indices)
 }
 
 pub fn create_rect(r: Rect, index_start: &mut u16, color: &wgpu::Color) -> (Vec<Vertex>, Vec<u16>) {
@@ -128,7 +128,7 @@ pub fn create_point(p: &Point, index_start: &mut u16) -> (Vec<Vertex>, Vec<u16>)
     let i = *index_start;
     let indices: Vec<u16> = vec![
         //outer square
-        i + 0,
+        i,
         i + 1,
         i + 3, // A, B, D
         i + 3,
@@ -136,7 +136,7 @@ pub fn create_point(p: &Point, index_start: &mut u16) -> (Vec<Vertex>, Vec<u16>)
         i + 2, // D, B, C
     ];
     *index_start += 4;
-    return (vertices, indices);
+    (vertices, indices)
 }
 
 pub fn create_line(line: &Line, index_start: &mut u16) -> (Vec<Vertex>, Vec<u16>) {
@@ -169,9 +169,9 @@ pub fn create_line(line: &Line, index_start: &mut u16) -> (Vec<Vertex>, Vec<u16>
         },
     ];
     let i = *index_start;
-    let indices: Vec<u16> = vec![i + 2, i + 1, i + 0, i + 2, i + 0, i + 3];
+    let indices: Vec<u16> = vec![i + 2, i + 1, i, i + 2, i, i + 3];
     *index_start += 4;
-    return (vertices, indices);
+    (vertices, indices)
 }
 
 pub fn create_triangle(t: &Triangle, index_start: &mut u16) -> (Vec<Vertex>, Vec<u16>) {
@@ -191,9 +191,9 @@ pub fn create_triangle(t: &Triangle, index_start: &mut u16) -> (Vec<Vertex>, Vec
         }, // C
     ];
     let i = *index_start;
-    let indices: Vec<u16> = vec![i + 0, i + 1, i + 2];
+    let indices: Vec<u16> = vec![i, i + 1, i + 2];
     *index_start += 3;
-    return (vertices, indices);
+    (vertices, indices)
 }
 
 fn color_as_array(color: &wgpu::Color) -> [f32; 3] {

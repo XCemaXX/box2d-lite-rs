@@ -35,7 +35,7 @@ impl Button {
     }
 }
 
-pub static BUTTONS: &'static [(&'static str, Button)] = &[
+pub static BUTTONS: &[(&str, Button)] = &[
     (
         "Prev",
         Button::new_on_bot_panel(-BUTTON_WIDTH, LEFT_TRIANGLE),

@@ -4,9 +4,9 @@ pub struct Point {
     pub y: f32,
 }
 
-impl Into<[f32; 2]> for Point {
-    fn into(self) -> [f32; 2] {
-        [self.x, self.y]
+impl From<Point> for [f32; 2] {
+    fn from(val: Point) -> Self {
+        [val.x, val.y]
     }
 }
 

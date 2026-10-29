@@ -24,9 +24,10 @@ jobs:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt
+          components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all --check
+      - run: cargo clippy --locked -p box2d -p physics -p macroquad_gui --all-features --all-targets -- -D warnings
       - run: cargo test --locked -p box2d -p physics -p macroquad_gui --all-features
 
   build:
@@ -36,7 +37,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
+          components: clippy
       - uses: Swatinem/rust-cache@v2
+      # The winit gui builds for the web only.
+      - run: cargo clippy --locked -p wgpu-gui --target wasm32-unknown-unknown -- -D warnings
 
       - name: Read wasm-bindgen version from Cargo.lock
         id: wb
