@@ -6,7 +6,7 @@ mod joint;
 mod math_utils;
 mod world;
 
-pub use body::{Body, UNMOVABLE_MASS};
+pub use body::Body;
 pub use joint::Joint;
 pub use math_utils::Vec2;
 pub use world::World;

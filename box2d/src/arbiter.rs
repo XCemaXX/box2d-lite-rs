@@ -1,14 +1,13 @@
 use crate::body::Body;
 use crate::collide::collide;
-use crate::contact::{Contact, MAX_CONTACT_POINT};
-use crate::math_utils::{Vec2, clamp, cross_f_v, cross_v_f, dot};
+use crate::contact::Contacts;
+use crate::math_utils::{Vec2, clamp};
 use crate::world::{ACCUMULATE_IMPULSES, POSITION_CORRECTION, WARM_STARTING};
 use std::cell::RefCell;
 use std::rc::Rc;
 
 pub struct Arbiter {
-    contacts: [Contact; MAX_CONTACT_POINT],
-    num_contacts: usize,
+    contacts: Contacts,
     body1: Rc<RefCell<Body>>,
     body2: Rc<RefCell<Body>>,
     // Combined friction
@@ -16,84 +15,57 @@ pub struct Arbiter {
 }
 
 impl Arbiter {
-    pub fn create_arbiter_contacts(b1: Rc<RefCell<Body>>, b2: Rc<RefCell<Body>>) -> (Self, usize) {
-        let (b1, b2) = if b1.borrow().serial_number < b2.borrow().serial_number {
+    pub fn new(b1: Rc<RefCell<Body>>, b2: Rc<RefCell<Body>>) -> Self {
+        let (body1, body2) = if b1.borrow().serial_number < b2.borrow().serial_number {
             (b1, b2)
         } else {
             (b2, b1)
         };
-        let mut contacts: [Contact; MAX_CONTACT_POINT] = Default::default();
-        let body1 = b1.clone();
-        let body1 = &body1.borrow();
-        let body2 = b2.clone();
-        let body2 = &body2.borrow();
+        let (contacts, friction) = {
+            let (b1, b2) = (body1.borrow(), body2.borrow());
+            (collide(&b1, &b2), f32::sqrt(b1.friction * b2.friction))
+        };
+        Self {
+            contacts,
+            body1,
+            body2,
+            friction,
+        }
+    }
 
-        let num_contacts = collide(&mut contacts, body1, body2);
-        let friction = f32::sqrt(body1.friction * body2.friction);
-        (
-            Self {
-                contacts,
-                num_contacts,
-                body1: b1,
-                body2: b2,
-                friction,
-            },
-            num_contacts,
-        )
+    pub fn has_contacts(&self) -> bool {
+        !self.contacts.is_empty()
     }
 
     pub fn collide_points(&self) -> impl Iterator<Item = Vec2> + '_ {
-        self.contacts[..self.num_contacts]
-            .iter()
-            .map(|c| c.position)
+        self.contacts.as_slice().iter().map(|c| c.position)
     }
 
+    /// Takes the new contacts; contacts with the same feature keep their impulses.
     pub fn update(&mut self, other: &Self) {
-        self._update(&other.contacts, other.num_contacts);
-    }
-
-    fn _update(&mut self, new_contacts: &[Contact; MAX_CONTACT_POINT], num_new_contacts: usize) {
-        let mut merged_contacts: [Contact; MAX_CONTACT_POINT] = Default::default();
-
-        for i in 0..num_new_contacts {
-            let c_new = &new_contacts[i];
-
-            let k = 'found: {
-                for j in 0..self.num_contacts {
-                    let c_old = &self.contacts[j];
-                    if c_new.feature == c_old.feature {
-                        break 'found Some(j);
-                    }
-                }
-                None
-            };
-
-            if let Some(k) = k {
-                let c_old = &self.contacts[k];
-                merged_contacts[i] = c_new.clone();
+        let mut merged = other.contacts.clone();
+        for c in merged.as_mut_slice() {
+            let old = self
+                .contacts
+                .as_slice()
+                .iter()
+                .find(|old| old.feature == c.feature);
+            if let Some(old) = old {
                 if WARM_STARTING {
-                    merged_contacts[i].pn = c_old.pn;
-                    merged_contacts[i].pt = c_old.pt;
-                    merged_contacts[i].pnb = c_old.pnb;
+                    (c.pn, c.pt, c.pnb) = (old.pn, old.pt, old.pnb);
                 } else {
-                    merged_contacts[i].pn = 0.0;
-                    merged_contacts[i].pt = 0.0;
-                    merged_contacts[i].pnb = 0.0;
+                    (c.pn, c.pt, c.pnb) = (0.0, 0.0, 0.0);
                 }
-            } else {
-                merged_contacts[i] = new_contacts[i].clone();
             }
         }
-        self.contacts = merged_contacts;
-        self.num_contacts = num_new_contacts;
+        self.contacts = merged;
     }
 
     pub fn pre_step(&mut self, inv_dt: f32) {
         const K_ALLOWED_PENETRATION: f32 = 0.01;
         let k_bias_factor = if POSITION_CORRECTION { 0.2 } else { 0.0 };
 
-        for i in 0..self.num_contacts {
-            let c = &mut self.contacts[i];
+        for c in self.contacts.as_mut_slice() {
             let (tangent, r1, r2) = {
                 let body1 = self.body1.borrow();
                 let body2 = self.body2.borrow();
@@ -102,21 +74,21 @@ impl Arbiter {
                 let r2 = c.position - body2.position;
 
                 // Precompute normal mass, tangent mass, and bias.
-                let rn1 = dot(r1, c.normal);
-                let rn2 = dot(r2, c.normal);
+                let rn1 = r1.dot(c.normal);
+                let rn2 = r2.dot(c.normal);
                 let k_normal = body1.inv_mass
                     + body2.inv_mass
-                    + body1.inv_i * (dot(r1, r1) - rn1 * rn1)
-                    + body2.inv_i * (dot(r2, r2) - rn2 * rn2);
+                    + body1.inv_i * (r1.dot(r1) - rn1 * rn1)
+                    + body2.inv_i * (r2.dot(r2) - rn2 * rn2);
                 c.mass_normal = 1.0 / k_normal;
 
-                let tangent = cross_v_f(c.normal, 1.0);
-                let rt1 = dot(r1, tangent);
-                let rt2 = dot(r2, tangent);
+                let tangent = c.normal.cross_scalar(1.0);
+                let rt1 = r1.dot(tangent);
+                let rt2 = r2.dot(tangent);
                 let k_tangent = body1.inv_mass
                     + body2.inv_mass
-                    + body1.inv_i * (dot(r1, r1) - rt1 * rt1)
-                    + body2.inv_i * (dot(r2, r2) - rt2 * rt2);
+                    + body1.inv_i * (r1.dot(r1) - rt1 * rt1)
+                    + body2.inv_i * (r2.dot(r2) - rt2 * rt2);
                 c.mass_tangent = 1.0 / k_tangent;
 
                 c.bias =
@@ -134,9 +106,7 @@ impl Arbiter {
     }
 
     pub fn apply_impulse(&mut self) {
-        for i in 0..self.num_contacts {
-            let c = &mut self.contacts[i];
-
+        for c in self.contacts.as_mut_slice() {
             let (dpn, pn) = {
                 let body1 = self.body1.borrow();
                 let body2 = self.body2.borrow();
@@ -144,11 +114,11 @@ impl Arbiter {
                 c.r2 = c.position - body2.position;
 
                 // Relative velocity at contact
-                let dv = (body2.velocity + cross_f_v(body2.angular_velocity, c.r2))
-                    - (body1.velocity + cross_f_v(body1.angular_velocity, c.r1));
+                let dv = (body2.velocity + Vec2::scalar_cross(body2.angular_velocity, c.r2))
+                    - (body1.velocity + Vec2::scalar_cross(body1.angular_velocity, c.r1));
 
                 // Compute normal impulse
-                let vn = dot(dv, c.normal);
+                let vn = dv.dot(c.normal);
 
                 let dpn = c.mass_normal * (-vn + c.bias);
                 let dpn = if ACCUMULATE_IMPULSES {
@@ -170,11 +140,11 @@ impl Arbiter {
                 let body1 = self.body1.borrow();
                 let body2 = self.body2.borrow();
                 // Relative velocity at contact
-                let dv = (body2.velocity + cross_f_v(body2.angular_velocity, c.r2))
-                    - (body1.velocity + cross_f_v(body1.angular_velocity, c.r1));
+                let dv = (body2.velocity + Vec2::scalar_cross(body2.angular_velocity, c.r2))
+                    - (body1.velocity + Vec2::scalar_cross(body1.angular_velocity, c.r1));
 
-                let tangent = cross_v_f(c.normal, 1.0);
-                let vt = dot(dv, tangent);
+                let tangent = c.normal.cross_scalar(1.0);
+                let vt = dv.dot(tangent);
                 let dpt = c.mass_tangent * (-vt);
 
                 let dpt = if ACCUMULATE_IMPULSES {

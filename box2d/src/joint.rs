@@ -1,5 +1,5 @@
 use crate::body::Body;
-use crate::math_utils::{Mat22, Vec2, cross_f_v};
+use crate::math_utils::{Mat22, Vec2};
 use crate::world::{POSITION_CORRECTION, WARM_STARTING};
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -40,10 +40,10 @@ impl Joint {
             m: Default::default(),
             local_anchor1,
             local_anchor2,
-            r1: Vec2::default(),
-            r2: Vec2::default(),
-            bias: Vec2::default(),
-            p: Vec2::default(), // accumulated impulse
+            r1: Vec2::ZERO,
+            r2: Vec2::ZERO,
+            bias: Vec2::ZERO,
+            p: Vec2::ZERO, // accumulated impulse
             body1,
             body2,
             bias_factor: 0.2,
@@ -128,7 +128,7 @@ impl Joint {
             if POSITION_CORRECTION {
                 self.bias = -self.bias_factor * inv_dt * dp;
             } else {
-                self.bias.set(0.0, 0.0);
+                self.bias = Vec2::ZERO;
             }
         }
 
@@ -137,7 +137,7 @@ impl Joint {
             self.body1.borrow_mut().sub_velocity(self.r1, self.p);
             self.body2.borrow_mut().add_velocity(self.r2, self.p);
         } else {
-            self.p.set(0.0, 0.0);
+            self.p = Vec2::ZERO;
         }
     }
 
@@ -145,8 +145,8 @@ impl Joint {
         let impulse = {
             let body1 = self.body1.borrow();
             let body2 = self.body2.borrow();
-            let dv = (body2.velocity + cross_f_v(body2.angular_velocity, self.r2))
-                - (body1.velocity + cross_f_v(body1.angular_velocity, self.r1));
+            let dv = (body2.velocity + Vec2::scalar_cross(body2.angular_velocity, self.r2))
+                - (body1.velocity + Vec2::scalar_cross(body1.angular_velocity, self.r1));
 
             self.m * ((self.bias - dv) - (self.softness * self.p))
         };

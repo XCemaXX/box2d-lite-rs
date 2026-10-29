@@ -1,6 +1,6 @@
 use crate::body::Body;
-use crate::contact::{Contact, EdgeNumbers, Feature, MAX_CONTACT_POINT};
-use crate::math_utils::{Mat22, Vec2, dot};
+use crate::contact::{Contact, Contacts, EdgeNumbers, Feature, MAX_CONTACT_POINT};
+use crate::math_utils::{Mat22, Vec2};
 
 #[derive(Debug, PartialEq, Default)]
 enum Axis {
@@ -32,8 +32,8 @@ fn clip_segment_to_line(
     // Start with no output points
     let mut num_out = 0_usize;
     // Calculate the distance of end points to the line
-    let distance0 = dot(normal, v_in[0].v) - offset;
-    let distance1 = dot(normal, v_in[1].v) - offset;
+    let distance0 = normal.dot(v_in[0].v) - offset;
+    let distance1 = normal.dot(v_in[1].v) - offset;
     // If the points are behind the plane
     if distance0 <= 0.0 {
         v_out[num_out] = v_in[0];
@@ -76,37 +76,37 @@ fn compute_incident_edge(
 
     if n_abs.x > n_abs.y {
         if n.x >= 0.0 {
-            c[0].v.set(h.x, -h.y);
+            c[0].v = Vec2::new(h.x, -h.y);
             c[0].fp.in_edge2 = EdgeNumbers::Edge3;
             c[0].fp.out_edge2 = EdgeNumbers::Edge4;
 
-            c[1].v.set(h.x, h.y);
+            c[1].v = Vec2::new(h.x, h.y);
             c[1].fp.in_edge2 = EdgeNumbers::Edge4;
             c[1].fp.out_edge2 = EdgeNumbers::Edge1;
         } else {
-            c[0].v.set(-h.x, h.y);
+            c[0].v = Vec2::new(-h.x, h.y);
             c[0].fp.in_edge2 = EdgeNumbers::Edge1;
             c[0].fp.out_edge2 = EdgeNumbers::Edge2;
 
-            c[1].v.set(-h.x, -h.y);
+            c[1].v = Vec2::new(-h.x, -h.y);
             c[1].fp.in_edge2 = EdgeNumbers::Edge2;
             c[1].fp.out_edge2 = EdgeNumbers::Edge3;
         }
     } else {
         if n.y >= 0.0 {
-            c[0].v.set(h.x, h.y);
+            c[0].v = Vec2::new(h.x, h.y);
             c[0].fp.in_edge2 = EdgeNumbers::Edge4;
             c[0].fp.out_edge2 = EdgeNumbers::Edge1;
 
-            c[1].v.set(-h.x, h.y);
+            c[1].v = Vec2::new(-h.x, h.y);
             c[1].fp.in_edge2 = EdgeNumbers::Edge1;
             c[1].fp.out_edge2 = EdgeNumbers::Edge2;
         } else {
-            c[0].v.set(-h.x, -h.y);
+            c[0].v = Vec2::new(-h.x, -h.y);
             c[0].fp.in_edge2 = EdgeNumbers::Edge2;
             c[0].fp.out_edge2 = EdgeNumbers::Edge3;
 
-            c[1].v.set(h.x, -h.y);
+            c[1].v = Vec2::new(h.x, -h.y);
             c[1].fp.in_edge2 = EdgeNumbers::Edge3;
             c[1].fp.out_edge2 = EdgeNumbers::Edge4;
         }
@@ -116,7 +116,8 @@ fn compute_incident_edge(
     c[1].v = pos + (rot * c[1].v);
 }
 
-pub fn collide(contacts: &mut [Contact; MAX_CONTACT_POINT], body_a: &Body, body_b: &Body) -> usize {
+pub fn collide(body_a: &Body, body_b: &Body) -> Contacts {
+    let mut contacts = Contacts::default();
     // Setup
     let h_a = 0.5 * body_a.width;
     let h_b = 0.5 * body_b.width;
@@ -141,12 +142,12 @@ pub fn collide(contacts: &mut [Contact; MAX_CONTACT_POINT], body_a: &Body, body_
     // Box A faces
     let face_a = (da.abs() - h_a) - (abs_c * h_b);
     if face_a.x > 0.0 || face_a.y > 0.0 {
-        return 0;
+        return contacts;
     }
     // Box B faces
     let face_b = (db.abs() - (abs_ct * h_a)) - h_b;
     if face_b.x > 0.0 || face_b.y > 0.0 {
-        return 0;
+        return contacts;
     }
 
     // Find best axis
@@ -187,9 +188,9 @@ pub fn collide(contacts: &mut [Contact; MAX_CONTACT_POINT], body_a: &Body, body_
     match axis {
         Axis::FaceAX => {
             front_normal = normal;
-            front = dot(pos_a, front_normal) + h_a.x;
+            front = pos_a.dot(front_normal) + h_a.x;
             side_normal = rot_a.col2;
-            let side = dot(pos_a, side_normal);
+            let side = pos_a.dot(side_normal);
             neg_side = -side + h_a.y;
             pos_side = side + h_a.y;
             neg_edge = EdgeNumbers::Edge3;
@@ -198,9 +199,9 @@ pub fn collide(contacts: &mut [Contact; MAX_CONTACT_POINT], body_a: &Body, body_
         }
         Axis::FaceAY => {
             front_normal = normal;
-            front = dot(pos_a, front_normal) + h_a.y;
+            front = pos_a.dot(front_normal) + h_a.y;
             side_normal = rot_a.col1;
-            let side = dot(pos_a, side_normal);
+            let side = pos_a.dot(side_normal);
             neg_side = -side + h_a.x;
             pos_side = side + h_a.x;
             neg_edge = EdgeNumbers::Edge2;
@@ -209,9 +210,9 @@ pub fn collide(contacts: &mut [Contact; MAX_CONTACT_POINT], body_a: &Body, body_
         }
         Axis::FaceBX => {
             front_normal = -normal;
-            front = dot(pos_b, front_normal) + h_b.x;
+            front = pos_b.dot(front_normal) + h_b.x;
             side_normal = rot_b.col2;
-            let side = dot(pos_b, side_normal);
+            let side = pos_b.dot(side_normal);
             neg_side = -side + h_b.y;
             pos_side = side + h_b.y;
             neg_edge = EdgeNumbers::Edge3;
@@ -220,9 +221,9 @@ pub fn collide(contacts: &mut [Contact; MAX_CONTACT_POINT], body_a: &Body, body_
         }
         Axis::FaceBY => {
             front_normal = -normal;
-            front = dot(pos_b, front_normal) + h_b.y;
+            front = pos_b.dot(front_normal) + h_b.y;
             side_normal = rot_b.col1;
-            let side = dot(pos_b, side_normal);
+            let side = pos_b.dot(side_normal);
             neg_side = -side + h_b.x;
             pos_side = side + h_b.x;
             neg_edge = EdgeNumbers::Edge2;
@@ -244,7 +245,7 @@ pub fn collide(contacts: &mut [Contact; MAX_CONTACT_POINT], body_a: &Body, body_
         neg_edge,
     );
     if np < 2 {
-        return 0;
+        return contacts;
     }
 
     // Clip to negative box side 1
@@ -256,30 +257,32 @@ pub fn collide(contacts: &mut [Contact; MAX_CONTACT_POINT], body_a: &Body, body_
         pos_edge,
     );
     if np < 2 {
-        return 0;
+        return contacts;
     }
 
     // Now clipPoints2 contains the clipping points.
     // Due to roundoff, it is possible that clipping removes all points.
 
-    let mut num_contacts = 0_usize;
     for clip_point in &clip_points2 {
-        let separation = dot(front_normal, clip_point.v) - front;
+        let separation = front_normal.dot(clip_point.v) - front;
 
         if separation <= 0.0 {
-            contacts[num_contacts].separation = separation;
-            contacts[num_contacts].normal = normal;
-            // slide contact point onto reference face (easy to cull)
-            contacts[num_contacts].position = clip_point.v - (separation * front_normal);
-            contacts[num_contacts].feature = clip_point.fp;
+            let mut feature = clip_point.fp;
             if axis == Axis::FaceBX || axis == Axis::FaceBY {
-                flip(&mut contacts[num_contacts].feature)
+                flip(&mut feature)
             }
-            num_contacts += 1;
+            contacts.push(Contact {
+                separation,
+                normal,
+                // slide contact point onto reference face (easy to cull)
+                position: clip_point.v - (separation * front_normal),
+                feature,
+                ..Default::default()
+            });
         }
     }
 
-    num_contacts
+    contacts
 }
 
 #[cfg(test)]
@@ -291,23 +294,17 @@ mod tests {
     #[test]
     fn rotated_corner_touches_tilted_plank() {
         let tilt: f32 = 0.25;
-        let mut plank = Body::new(110.0, 4.0, f32::MAX, 0.0, 0.0);
+        let mut plank = Body::new_static(Vec2::new(110.0, 4.0), Vec2::ZERO);
         plank.rotation = tilt;
 
         // Box corner reaches the plank face at normal distance ~8.9.
         let (along, normal) = (40.0, 8.0);
         let (sin, cos) = tilt.sin_cos();
-        let mut b = Body::new(
-            10.0,
-            10.0,
-            1.0,
-            along * cos - normal * sin,
-            along * sin + normal * cos,
-        );
+        let position = Vec2::new(along * cos - normal * sin, along * sin + normal * cos);
+        let mut b = Body::new_dynamic(Vec2::new(10.0, 10.0), 1.0, position);
         b.rotation = tilt - 0.56;
 
-        let mut contacts: [Contact; MAX_CONTACT_POINT] = Default::default();
-        assert!(collide(&mut contacts, &plank, &b) > 0);
-        assert!(collide(&mut contacts, &b, &plank) > 0);
+        assert!(!collide(&plank, &b).is_empty());
+        assert!(!collide(&b, &plank).is_empty());
     }
 }

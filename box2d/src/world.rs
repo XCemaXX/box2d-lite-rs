@@ -12,15 +12,15 @@ pub struct World {
     joints: Vec<Rc<RefCell<Joint>>>,
     arbiters: BTreeMap<(usize, usize), Arbiter>,
     gravity: Vec2,
-    iterations: i32,
+    iterations: u32,
 }
 
-pub static ACCUMULATE_IMPULSES: bool = true;
-pub static WARM_STARTING: bool = true;
-pub static POSITION_CORRECTION: bool = true;
+pub const ACCUMULATE_IMPULSES: bool = true;
+pub const WARM_STARTING: bool = true;
+pub const POSITION_CORRECTION: bool = true;
 
 impl World {
-    pub fn new(gravity: Vec2, iterations: i32) -> Self {
+    pub fn new(gravity: Vec2, iterations: u32) -> Self {
         Self {
             bodies: Vec::new(),
             joints: Vec::new(),
@@ -77,13 +77,11 @@ impl World {
 
         // Integrate forces.
         for body in &mut self.bodies {
-            let inv_mass = body.borrow().inv_mass;
-            let force = body.borrow().force;
             let mut body = body.borrow_mut();
-
-            if inv_mass == 0.0 {
+            if body.is_static() {
                 continue;
             }
+            let (inv_mass, force) = (body.inv_mass, body.force);
             body.velocity += dt * (self.gravity + (inv_mass * force));
             body.angular_velocity += dt * body.inv_i * body.torque;
         }
@@ -118,7 +116,7 @@ impl World {
             body.position += dt * velocity;
             body.rotation += dt * angular_velocity;
 
-            body.force.set(0.0, 0.0);
+            body.force = Vec2::ZERO;
             body.torque = 0.0;
         }
     }
@@ -130,16 +128,13 @@ impl World {
             for j in (i + 1)..self.bodies.len() {
                 let bj = self.bodies[j].borrow();
 
-                if bi.inv_mass == 0.0 && bj.inv_mass == 0.0 {
+                if bi.is_static() && bj.is_static() {
                     continue;
                 }
-                let (new_arb, new_num_contacts) = Arbiter::create_arbiter_contacts(
-                    self.bodies[i].clone(),
-                    self.bodies[j].clone(),
-                );
+                let new_arb = Arbiter::new(self.bodies[i].clone(), self.bodies[j].clone());
                 let key = new_arb.get_key();
 
-                if new_num_contacts > 0 {
+                if new_arb.has_contacts() {
                     if let Some(arb) = self.arbiters.get_mut(&key) {
                         arb.update(&new_arb);
                     } else {

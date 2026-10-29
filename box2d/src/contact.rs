@@ -47,3 +47,29 @@ pub struct Contact {
 }
 
 pub const MAX_CONTACT_POINT: usize = 2;
+
+/// Up to `MAX_CONTACT_POINT` contacts of one body pair, without allocation.
+#[derive(Default, Clone)]
+pub struct Contacts {
+    items: [Contact; MAX_CONTACT_POINT],
+    len: usize,
+}
+
+impl Contacts {
+    pub fn push(&mut self, contact: Contact) {
+        self.items[self.len] = contact;
+        self.len += 1;
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    pub fn as_slice(&self) -> &[Contact] {
+        &self.items[..self.len]
+    }
+
+    pub fn as_mut_slice(&mut self) -> &mut [Contact] {
+        &mut self.items[..self.len]
+    }
+}
