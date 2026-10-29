@@ -21,11 +21,11 @@ pub fn init_scene(scene: usize, state: &mut PhysicsState) {
     DEMO_SCENES[scene].1(state);
 }
 
-pub fn get_scene_name(scene: usize) -> &'static str {
+pub fn scene_name(scene: usize) -> &'static str {
     DEMO_SCENES[scene].0
 }
 
-pub fn get_scene_amount() -> usize {
+pub fn scene_count() -> usize {
     DEMO_SCENES.len()
 }
 

@@ -10,11 +10,12 @@ pub struct Body {
     pub force: Vec2,
     pub torque: f32,
 
-    pub width: Vec2,
+    /// Full width and height.
+    pub size: Vec2,
 
     pub friction: f32,
-    pub inv_mass: f32,
-    pub inv_i: f32,
+    pub(crate) inv_mass: f32,
+    pub(crate) inv_i: f32,
 }
 
 impl Body {
@@ -36,7 +37,7 @@ impl Body {
             angular_velocity: 0.0,
             force: Vec2::ZERO,
             torque: 0.0,
-            width: size,
+            size,
             friction: 0.2,
             inv_mass,
             inv_i,
