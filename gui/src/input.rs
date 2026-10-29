@@ -1,4 +1,4 @@
-use crate::buttons::BUTTONS;
+use crate::buttons::{Action, BUTTONS};
 use winit::keyboard::KeyCode;
 
 pub enum Event {
@@ -24,24 +24,15 @@ impl InputState {
         }
         // Outside the field: a click on the bars does nothing.
         if let Some([x, y]) = self.cursor.pos {
-            for (name, b) in BUTTONS {
-                if b.in_button(x, y) {
-                    match *name {
-                        "Prev" => {
-                            self.events.push(Event::ChangeToPrevScene);
-                        }
-                        "Restart" => {
-                            self.events.push(Event::Restart);
-                        }
-                        "Next" => {
-                            self.events.push(Event::ChangeToNextScene);
-                        }
-                        _ => {}
-                    }
-                    return;
-                }
-            }
-            self.events.push(Event::CreateBox(x, y));
+            let event = match BUTTONS.iter().find(|b| b.in_button(x, y)) {
+                Some(b) => match b.action {
+                    Action::Prev => Event::ChangeToPrevScene,
+                    Action::Restart => Event::Restart,
+                    Action::Next => Event::ChangeToNextScene,
+                },
+                None => Event::CreateBox(x, y),
+            };
+            self.events.push(event);
         }
     }
 

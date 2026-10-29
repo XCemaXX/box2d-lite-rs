@@ -1,9 +1,9 @@
 mod draw_primitives;
+mod gpu_buffer;
 mod math;
 
 use bytemuck::{Pod, Zeroable};
 use std::borrow::Cow;
-use wgpu::util::DeviceExt;
 use wgpu::{RenderPipeline, Surface};
 use wgpu_text::{
     BrushBuilder, TextBrush,
@@ -12,10 +12,9 @@ use wgpu_text::{
 
 use crate::buttons::BUTTONS;
 use crate::letterbox::{Letterbox, Rect};
-use draw_primitives::{create_bordered_rectangle, create_line, create_point, create_rect};
+use draw_primitives::Mesh;
+use gpu_buffer::GpuBuffer;
 use physics::primitives::{Line, Point, Rectangle};
-
-use self::draw_primitives::create_triangle;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
@@ -73,13 +72,11 @@ pub struct Render<'a> {
     size: Size,
     render_pipeline: wgpu::RenderPipeline,
 
-    vertices: Vec<Vertex>,
-    indices: Vec<u16>,
-    vertex_buffer: wgpu::Buffer,
-    index_buffer: wgpu::Buffer,
+    mesh: Mesh,
+    vertex_buffer: GpuBuffer,
+    index_buffer: GpuBuffer,
 
     text_brush: TextBrush<FontRef<'a>>,
-    pub text: String,
 }
 
 impl<'a> Render<'a> {
@@ -98,7 +95,8 @@ impl<'a> Render<'a> {
         surface.configure(&device, &config);
 
         let render_pipeline = setup_render(&device, &surface, &adapter, &config);
-        let (vertex_buffer, index_buffer, vertices, indices) = init_vertices(&device);
+        let vertex_buffer = GpuBuffer::new(&device, "Vertex Buffer", wgpu::BufferUsages::VERTEX);
+        let index_buffer = GpuBuffer::new(&device, "Index Buffer", wgpu::BufferUsages::INDEX);
         let text_brush = init_text(&device, &config);
         Self {
             surface,
@@ -107,18 +105,16 @@ impl<'a> Render<'a> {
             config,
             size,
             render_pipeline,
-            vertices,
-            indices,
+            mesh: Mesh::default(),
             vertex_buffer,
             index_buffer,
             text_brush,
-            text: "START".to_string(),
         }
     }
 
     /// `field` is the letterbox field in surface pixels.
     /// `scale_factor` is the device pixel ratio: the surface is in physical pixels.
-    pub fn render(&mut self, field: Rect, scale_factor: f32) {
+    pub fn render(&mut self, field: Rect, scale_factor: f32, text: &str) {
         let frame = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(frame)
             | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
@@ -158,15 +154,17 @@ impl<'a> Render<'a> {
         let x = field.x.clamp(0.0, w);
         let y = field.y.clamp(0.0, h);
         rpass.set_viewport(x, y, field.w.min(w - x), field.h.min(h - y), 0.0, 1.0);
-        rpass.set_pipeline(&self.render_pipeline);
-        rpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-        rpass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-        rpass.draw_indexed(0..self.indices.len() as u32, 0, 0..1);
+        if !self.mesh.indices.is_empty() {
+            rpass.set_pipeline(&self.render_pipeline);
+            rpass.set_vertex_buffer(0, self.vertex_buffer.slice());
+            rpass.set_index_buffer(self.index_buffer.slice(), wgpu::IndexFormat::Uint32);
+            rpass.draw_indexed(0..self.mesh.indices.len() as u32, 0, 0..1);
+        }
 
         // Text is an overlay over the whole surface, in pixels.
         rpass.set_viewport(0.0, 0.0, w, h, 0.0, 1.0);
-        let text_section = TextSection::default()
-            .add_text(Text::new(&self.text).with_scale(TEXT_SIZE * scale_factor));
+        let text_section =
+            TextSection::default().add_text(Text::new(text).with_scale(TEXT_SIZE * scale_factor));
         self.text_brush
             .queue(&self.device, &self.queue, vec![&text_section])
             .unwrap();
@@ -180,52 +178,33 @@ impl<'a> Render<'a> {
     pub fn update_frame(
         &mut self,
         letterbox: &Letterbox,
-        rectangles: Vec<Rectangle>,
-        points: Vec<Point>,
-        lines: Vec<Line>,
+        rectangles: &[Rectangle],
+        points: &[Point],
+        lines: &[Line],
     ) {
-        let mut index = 0_u16;
-        (self.vertices, self.indices) =
-            create_rect(letterbox.world(), &mut index, &GRAY_BACKGROUND);
-        let (vertices, indices) = create_buttons(&mut index);
-        self.vertices.extend(vertices.iter());
-        self.indices.extend(indices.iter());
+        let mesh = &mut self.mesh;
+        mesh.clear();
+        mesh.push_rect(letterbox.world(), &GRAY_BACKGROUND);
+        for b in BUTTONS {
+            mesh.push_bordered_rectangle(&b.rect, &GRAY_BUTTON);
+            mesh.push_icon(&b.icon);
+        }
         for r in rectangles {
-            let (vertices, indices) = create_bordered_rectangle(r, &mut index, &GRAY_BACKGROUND);
-            self.vertices.extend(vertices.iter());
-            self.indices.extend(indices.iter());
+            mesh.push_bordered_rectangle(r, &GRAY_BACKGROUND);
         }
         for p in points {
-            let (vertices, indices) = create_point(&p, &mut index);
-            self.vertices.extend(vertices.iter());
-            self.indices.extend(indices.iter());
+            mesh.push_point(p);
         }
         for l in lines {
-            let (vertices, indices) = create_line(&l, &mut index);
-            self.vertices.extend(vertices.iter());
-            self.indices.extend(indices.iter());
+            mesh.push_line(l);
         }
-        for v in &mut self.vertices {
-            v.position = letterbox.world_to_ndc(v.position);
-        }
-        self.update_buffers();
-    }
+        mesh.map_positions(|p| letterbox.world_to_ndc(p));
 
-    fn update_buffers(&mut self) {
-        self.vertex_buffer = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Vertex Buffer"),
-                contents: bytemuck::cast_slice(&self.vertices),
-                usage: wgpu::BufferUsages::VERTEX,
-            });
-        self.index_buffer = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Index Buffer"),
-                contents: bytemuck::cast_slice(&self.indices),
-                usage: wgpu::BufferUsages::INDEX,
-            });
+        let (device, queue) = (&self.device, &self.queue);
+        self.vertex_buffer
+            .upload(device, queue, bytemuck::cast_slice(&mesh.vertices));
+        self.index_buffer
+            .upload(device, queue, bytemuck::cast_slice(&mesh.indices));
     }
 
     /// Returns the size actually used: the GPU limits the surface size.
@@ -242,20 +221,6 @@ impl<'a> Render<'a> {
     }
 }
 
-fn create_buttons(index_start: &mut u16) -> (Vec<Vertex>, Vec<u16>) {
-    let mut vertices: Vec<Vertex> = Vec::new();
-    let mut indices: Vec<u16> = Vec::new();
-    for (_name, b) in BUTTONS {
-        let (v, i) = create_bordered_rectangle(b.rect.clone(), index_start, &GRAY_BUTTON);
-        vertices.extend(v.iter());
-        indices.extend(i.iter());
-        let (v, i) = create_triangle(&b.icon, index_start);
-        vertices.extend(v.iter());
-        indices.extend(i.iter());
-    }
-    (vertices, indices)
-}
-
 fn init_text<'a>(
     device: &wgpu::Device,
     config: &wgpu::SurfaceConfiguration,
@@ -265,21 +230,6 @@ fn init_text<'a>(
         .unwrap()
         /* .initial_cache_size((16_384, 16_384))) */ // use this to avoid resizing cache texture
         .build(device, config.width, config.height, config.format)
-}
-
-fn init_vertices(device: &wgpu::Device) -> (wgpu::Buffer, wgpu::Buffer, Vec<Vertex>, Vec<u16>) {
-    let (v, i) = (Vec::new(), Vec::new());
-    let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Vertex Buffer"),
-        contents: bytemuck::cast_slice(&v),
-        usage: wgpu::BufferUsages::VERTEX,
-    });
-    let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Index Buffer"),
-        contents: bytemuck::cast_slice(&i),
-        usage: wgpu::BufferUsages::INDEX,
-    });
-    (vertex_buffer, index_buffer, v, i)
 }
 
 async fn init_screen<'a>(

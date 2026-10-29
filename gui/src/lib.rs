@@ -35,13 +35,20 @@ extern "C" {
 #[derive(Default)]
 pub struct App {
     window: Option<Arc<Window>>,
-    render: Option<Render<'static>>,
-    last_render_time: Option<web_time::Instant>,
-    renderer_receiver: Option<Receiver<Render<'static>>>,
+    pending_render: Option<Receiver<Render<'static>>>,
+    running: Option<Running>,
+    // Resize can come before the renderer is ready: keep the size for it.
     last_size: (u32, u32),
-    input_state: Option<InputState>,
-    physics_state: Option<PhysicsState>,
-    letterbox: Option<Letterbox>,
+}
+
+/// The app after the renderer is ready.
+struct Running {
+    window: Arc<Window>,
+    render: Render<'static>,
+    letterbox: Letterbox,
+    input: InputState,
+    physics: PhysicsState,
+    last_frame: web_time::Instant,
     fps: FpsCounter,
 }
 
@@ -62,6 +69,31 @@ impl FpsCounter {
             self.frames = 0;
             self.time = 0.0;
         }
+    }
+}
+
+impl App {
+    fn try_start(&mut self) {
+        let (Some(receiver), Some(window)) = (self.pending_render.as_mut(), self.window.as_ref())
+        else {
+            return;
+        };
+        let Ok(Some(mut render)) = receiver.try_recv() else {
+            return;
+        };
+        self.pending_render = None;
+        let (w, h) = render.resize(self.last_size.0, self.last_size.1);
+        let mut letterbox = Letterbox::new(WORLD, true);
+        letterbox.resize(w as f32, h as f32);
+        self.running = Some(Running {
+            window: window.clone(),
+            render,
+            letterbox,
+            input: InputState::default(),
+            physics: PhysicsState::new(0),
+            last_frame: web_time::Instant::now(),
+            fps: FpsCounter::default(),
+        });
     }
 }
 
@@ -89,21 +121,16 @@ impl ApplicationHandler for App {
             self.window = Some(window_handle.clone());
             if first_window_handle {
                 let (sender, receiver) = futures::channel::oneshot::channel();
-                self.renderer_receiver = Some(receiver);
+                self.pending_render = Some(receiver);
                 std::panic::set_hook(Box::new(console_error_panic_hook::hook));
                 console_log::init().expect("Failed to initialize logger!");
                 log::info!("Canvas dimensions: ({canvas_width} x {canvas_height})");
                 wasm_bindgen_futures::spawn_local(async move {
-                    let render =
-                        Render::new(window_handle.clone(), canvas_width, canvas_height).await;
+                    let render = Render::new(window_handle, canvas_width, canvas_height).await;
                     if sender.send(render).is_err() {
                         log::error!("Failed to create and send render!");
                     }
                 });
-                self.last_render_time = Some(web_time::Instant::now());
-                self.input_state = Some(InputState::default());
-                self.physics_state = Some(PhysicsState::new(0));
-                self.letterbox = Some(Letterbox::new(WORLD, true));
             }
         }
     }
@@ -114,41 +141,25 @@ impl ApplicationHandler for App {
         _window_id: winit::window::WindowId,
         event: winit::event::WindowEvent,
     ) {
-        // Resize can come before the renderer is ready: keep the size for it.
         if let WindowEvent::Resized(PhysicalSize { width, height }) = event {
             self.last_size = (width, height);
         }
-        if let Some(mut receiver) = self.renderer_receiver.take() {
-            if let Ok(Some(mut render)) = receiver.try_recv() {
-                let (w, h) = render.resize(self.last_size.0, self.last_size.1);
-                if let Some(letterbox) = self.letterbox.as_mut() {
-                    letterbox.resize(w as f32, h as f32);
-                }
-                self.render = Some(render);
-            } else {
-                self.renderer_receiver = Some(receiver);
-            }
-        }
-
-        let (
-            Some(render_state),
-            Some(window),
-            Some(last_render_time),
-            Some(input_state),
-            Some(physics_state),
-            Some(letterbox),
-        ) = (
-            self.render.as_mut(),
-            self.window.as_ref(),
-            self.last_render_time.as_mut(),
-            self.input_state.as_mut(),
-            self.physics_state.as_mut(),
-            self.letterbox.as_mut(),
-        )
-        else {
+        self.try_start();
+        let Some(app) = self.running.as_mut() else {
             return;
         };
+        if let WindowEvent::CloseRequested = event {
+            log::info!("Close requested. Exiting...");
+            event_loop.exit();
+            return;
+        }
+        app.handle(event);
+        app.window.request_redraw();
+    }
+}
 
+impl Running {
+    fn handle(&mut self, event: WindowEvent) {
         match event {
             WindowEvent::KeyboardInput {
                 event:
@@ -159,71 +170,68 @@ impl ApplicationHandler for App {
                     },
                 ..
             } => {
-                input_state.update_keyboard(state.is_pressed(), key);
+                self.input.update_keyboard(state.is_pressed(), key);
             }
             WindowEvent::Resized(PhysicalSize { width, height }) => {
-                let (w, h) = render_state.resize(width, height);
-                letterbox.resize(w as f32, h as f32);
+                let (w, h) = self.render.resize(width, height);
+                self.letterbox.resize(w as f32, h as f32);
             }
-            WindowEvent::CloseRequested => {
-                log::info!("Close requested. Exiting...");
-                event_loop.exit();
-            }
-            WindowEvent::RedrawRequested => {
-                let dt = last_render_time.elapsed().as_secs_f32();
-                *last_render_time = web_time::Instant::now();
-                self.fps.add_frame(dt);
-                let fps = self.fps.value;
-
-                input_events_to_physics(input_state, physics_state);
-                physics_state.step(dt);
-                let rectangles = physics_state.get_rectangles();
-                let collide_points = physics_state.get_collide_points();
-                let joint_lines = physics_state.get_joint_lines();
-
-                let controls_text = "Controls: 1-9 scenes; Space: restart; P, N - prev, next scene;
-               Click - add box";
-                if cfg!(debug_assertions) {
-                    render_state.text = format!(
-                        "{}\nfps: {:.1}\n{}\n{}",
-                        input_state, fps, physics_state, controls_text
-                    );
-                } else {
-                    render_state.text =
-                        format!("fps: {fps:.1}\n{}\n{}", physics_state, controls_text);
-                }
-
-                render_state.update_frame(letterbox, rectangles, collide_points, joint_lines);
-                render_state.render(letterbox.field(), window.scale_factor() as f32);
-            }
+            WindowEvent::RedrawRequested => self.redraw(),
             WindowEvent::MouseInput {
                 state,
                 button: MouseButton::Left,
                 ..
             } => {
-                input_state.update_cursor_buttons(state.is_pressed());
+                self.input.update_cursor_buttons(state.is_pressed());
             }
             // Positions are in surface pixels, the same space as the letterbox field.
             WindowEvent::CursorMoved { position, .. } => {
-                input_state
-                    .update_cursor_pos(letterbox.to_world(position.x as f32, position.y as f32));
+                let pos = self
+                    .letterbox
+                    .to_world(position.x as f32, position.y as f32);
+                self.input.update_cursor_pos(pos);
             }
             WindowEvent::Touch(t) => {
-                let pos = letterbox.to_world(t.location.x as f32, t.location.y as f32);
-                input_state.update_cursor_pos(pos);
+                let pos = self
+                    .letterbox
+                    .to_world(t.location.x as f32, t.location.y as f32);
+                self.input.update_cursor_pos(pos);
                 match t.phase {
-                    TouchPhase::Started => {
-                        input_state.update_cursor_buttons(true);
-                    }
-                    TouchPhase::Ended => {
-                        input_state.update_cursor_buttons(false);
-                    }
+                    TouchPhase::Started => self.input.update_cursor_buttons(true),
+                    TouchPhase::Ended => self.input.update_cursor_buttons(false),
                     _ => {}
-                };
+                }
             }
             _ => (),
         }
-        window.request_redraw();
+    }
+
+    fn redraw(&mut self) {
+        let dt = self.last_frame.elapsed().as_secs_f32();
+        self.last_frame = web_time::Instant::now();
+        self.fps.add_frame(dt);
+
+        input_events_to_physics(&mut self.input, &mut self.physics);
+        self.physics.step(dt);
+
+        let controls = "Controls: 1-9 scenes; Space: restart; P, N - prev, next scene;
+               Click - add box";
+        let (fps, physics) = (self.fps.value, &self.physics);
+        let text = if cfg!(debug_assertions) {
+            format!("{}\nfps: {fps:.1}\n{physics}\n{controls}", self.input)
+        } else {
+            format!("fps: {fps:.1}\n{physics}\n{controls}")
+        };
+
+        self.render.update_frame(
+            &self.letterbox,
+            &physics.get_rectangles(),
+            &physics.get_collide_points(),
+            &physics.get_joint_lines(),
+        );
+        let scale_factor = self.window.scale_factor() as f32;
+        self.render
+            .render(self.letterbox.field(), scale_factor, &text);
     }
 }
 
