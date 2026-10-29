@@ -1,3 +1,4 @@
+use crate::letterbox::Rect;
 use crate::render::Vertex;
 use crate::render::math;
 use physics::primitives::{Line, Point, Rectangle, Triangle};
@@ -72,6 +73,33 @@ pub fn create_bordered_rectangle(
     ];
     *index_start += 8;
     return (vertices, indices);
+}
+
+pub fn create_rect(r: Rect, index_start: &mut u16, color: &wgpu::Color) -> (Vec<Vertex>, Vec<u16>) {
+    let color = color_as_array(color);
+    let (x0, y0, x1, y1) = (r.x, r.y, r.x + r.w, r.y + r.h);
+    let vertices = vec![
+        Vertex {
+            position: [x0, y0],
+            color,
+        },
+        Vertex {
+            position: [x1, y0],
+            color,
+        },
+        Vertex {
+            position: [x1, y1],
+            color,
+        },
+        Vertex {
+            position: [x0, y1],
+            color,
+        },
+    ];
+    let i = *index_start;
+    let indices = vec![i, i + 1, i + 3, i + 3, i + 1, i + 2];
+    *index_start += 4;
+    (vertices, indices)
 }
 
 pub fn create_point(p: &Point, index_start: &mut u16) -> (Vec<Vertex>, Vec<u16>) {

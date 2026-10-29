@@ -2,7 +2,25 @@
 <html>
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Box-2d-rs</title>
+    <style>
+      /* The canvas size comes from CSS only. winit reads it and sets the
+         drawing buffer size; without it the surface grows on each resize. */
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #808080;
+      }
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        touch-action: none;
+      }
+    </style>
   </head>
 
   <body>

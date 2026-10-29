@@ -11,7 +11,8 @@ use wgpu_text::{
 };
 
 use crate::buttons::BUTTONS;
-use draw_primitives::{create_bordered_rectangle, create_line, create_point};
+use crate::letterbox::{Letterbox, Rect};
+use draw_primitives::{create_bordered_rectangle, create_line, create_point, create_rect};
 use physics::primitives::{Line, Point, Rectangle};
 
 use self::draw_primitives::create_triangle;
@@ -39,6 +40,16 @@ const GRAY_BACKGROUND: wgpu::Color = wgpu::Color {
     r: 0.66, // 167/256
     g: 0.66,
     b: 0.66,
+    a: 1.0,
+};
+
+// Text size in CSS pixels; scaled by the device pixel ratio.
+const TEXT_SIZE: f32 = 16.0;
+
+const GRAY_BARS: wgpu::Color = wgpu::Color {
+    r: 0.5,
+    g: 0.5,
+    b: 0.5,
     a: 1.0,
 };
 
@@ -77,9 +88,10 @@ impl<'a> Render<'a> {
         width: u32,
         height: u32,
     ) -> Render<'a> {
-        let mut size = Size { width, height };
-        size.width = size.width.max(600);
-        size.height = size.height.max(600);
+        let size = Size {
+            width: width.max(1),
+            height: height.max(1),
+        };
         let (surface, adapter, device, queue) = init_screen(window).await;
 
         let config = config_surface(&surface, &adapter, &size);
@@ -104,7 +116,9 @@ impl<'a> Render<'a> {
         }
     }
 
-    pub fn render(&mut self) -> () {
+    /// `field` is the letterbox field in surface pixels.
+    /// `scale_factor` is the device pixel ratio: the surface is in physical pixels.
+    pub fn render(&mut self, field: Rect, scale_factor: f32) {
         let frame = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(frame)
             | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
@@ -128,7 +142,7 @@ impl<'a> Render<'a> {
                 view: &view,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(GRAY_BACKGROUND),
+                    load: wgpu::LoadOp::Clear(GRAY_BARS),
                     store: wgpu::StoreOp::Store,
                 },
                 depth_slice: None,
@@ -139,12 +153,20 @@ impl<'a> Render<'a> {
             multiview_mask: None,
         });
 
+        let (w, h) = (self.size.width as f32, self.size.height as f32);
+        // Float rounding must not push the viewport out of the surface.
+        let x = field.x.clamp(0.0, w);
+        let y = field.y.clamp(0.0, h);
+        rpass.set_viewport(x, y, field.w.min(w - x), field.h.min(h - y), 0.0, 1.0);
         rpass.set_pipeline(&self.render_pipeline);
         rpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         rpass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
         rpass.draw_indexed(0..self.indices.len() as u32, 0, 0..1);
 
-        let text_section = TextSection::default().add_text(Text::new(&self.text));
+        // Text is an overlay over the whole surface, in pixels.
+        rpass.set_viewport(0.0, 0.0, w, h, 0.0, 1.0);
+        let text_section = TextSection::default()
+            .add_text(Text::new(&self.text).with_scale(TEXT_SIZE * scale_factor));
         self.text_brush
             .queue(&self.device, &self.queue, vec![&text_section])
             .unwrap();
@@ -157,14 +179,17 @@ impl<'a> Render<'a> {
 
     pub fn update_frame(
         &mut self,
+        letterbox: &Letterbox,
         rectangles: Vec<Rectangle>,
         points: Vec<Point>,
         lines: Vec<Line>,
     ) {
         let mut index = 0_u16;
-        self.vertices.clear();
-        self.indices.clear();
-        (self.vertices, self.indices) = create_buttons(&mut index);
+        (self.vertices, self.indices) =
+            create_rect(letterbox.world(), &mut index, &GRAY_BACKGROUND);
+        let (vertices, indices) = create_buttons(&mut index);
+        self.vertices.extend(vertices.iter());
+        self.indices.extend(indices.iter());
         for r in rectangles {
             let (vertices, indices) = create_bordered_rectangle(r, &mut index, &GRAY_BACKGROUND);
             self.vertices.extend(vertices.iter());
@@ -179,6 +204,9 @@ impl<'a> Render<'a> {
             let (vertices, indices) = create_line(&l, &mut index);
             self.vertices.extend(vertices.iter());
             self.indices.extend(indices.iter());
+        }
+        for v in &mut self.vertices {
+            v.position = letterbox.world_to_ndc(v.position);
         }
         self.update_buffers();
     }
@@ -200,14 +228,17 @@ impl<'a> Render<'a> {
             });
     }
 
-    pub fn resize(&mut self, width: u32, height: u32) {
-        self.size.width = width.max(600);
-        self.size.height = height.max(600);
+    /// Returns the size actually used: the GPU limits the surface size.
+    pub fn resize(&mut self, width: u32, height: u32) -> (u32, u32) {
+        let max = self.device.limits().max_texture_dimension_2d;
+        self.size.width = width.clamp(1, max);
+        self.size.height = height.clamp(1, max);
         self.config.width = self.size.width;
         self.config.height = self.size.height;
-        // doesn't work. infinite resize
-        //self.surface.configure(&self.device, &self.config);
-        //self.text_brush.resize_view(self.size.width as f32, self.size.height as f32, &self.queue);
+        self.surface.configure(&self.device, &self.config);
+        self.text_brush
+            .resize_view(self.size.width as f32, self.size.height as f32, &self.queue);
+        (self.size.width, self.size.height)
     }
 }
 

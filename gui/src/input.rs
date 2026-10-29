@@ -28,9 +28,13 @@ impl Default for InputState {
 impl InputState {
     pub fn update_cursor_buttons(&mut self, pressed: bool) {
         self.cursor.update_buttons(pressed);
-        if self.cursor.button_pressed {
+        if !self.cursor.button_pressed {
+            return;
+        }
+        // Outside the field: a click on the bars does nothing.
+        if let Some([x, y]) = self.cursor.pos {
             for (name, b) in BUTTONS {
-                if b.in_button(self.cursor.x, self.cursor.y) {
+                if b.in_button(x, y) {
                     match name {
                         &"Prev" => {
                             self.events.push(Event::ChangeToPrevScene);
@@ -46,13 +50,12 @@ impl InputState {
                     return;
                 }
             }
-            self.events
-                .push(Event::CreateBox(self.cursor.x, self.cursor.y));
+            self.events.push(Event::CreateBox(x, y));
         }
     }
 
-    pub fn update_cursor_pos(&mut self, x: f32, y: f32) {
-        self.cursor.set_pos(x, y);
+    pub fn update_cursor_pos(&mut self, pos: Option<[f32; 2]>) {
+        self.cursor.pos = pos;
     }
 
     pub fn update_keyboard(&mut self, pressed: bool, key: KeyCode) {
@@ -79,34 +82,22 @@ impl InputState {
 
 impl std::fmt::Display for InputState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Mouse: {:.3} {:.3}", self.cursor.x, self.cursor.y)
-    }
-}
-
-pub struct CursorState {
-    button_pressed: bool,
-    x: f32,
-    y: f32,
-}
-
-impl Default for CursorState {
-    fn default() -> Self {
-        Self {
-            button_pressed: false,
-            x: 0.0,
-            y: 0.0,
+        match self.cursor.pos {
+            Some([x, y]) => write!(f, "Mouse: {x:.3} {y:.3}"),
+            None => write!(f, "Mouse: outside"),
         }
     }
+}
+
+#[derive(Default)]
+pub struct CursorState {
+    button_pressed: bool,
+    pos: Option<[f32; 2]>,
 }
 
 impl CursorState {
     fn update_buttons(&mut self, pressed: bool) {
         self.button_pressed = pressed;
-    }
-
-    fn set_pos(&mut self, x: f32, y: f32) {
-        self.x = x;
-        self.y = y;
     }
 }
 
