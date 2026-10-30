@@ -3,12 +3,15 @@ updates:
 - package-ecosystem: cargo
   directory: "/"
   schedule:
-    interval: weekly
-  open-pull-requests-limit: 10
+    interval: monthly
+  # One pull request for all crates, majors included.
   groups:
-    minor-and-patch:
-      update-types: [minor, patch]
+    cargo:
+      patterns: ["*"]
 - package-ecosystem: github-actions
   directory: "/"
   schedule:
     interval: monthly
+  groups:
+    actions:
+      patterns: ["*"]
