@@ -7,7 +7,7 @@ mod utils;
 use std::sync::Arc;
 use winit::{
     application::ApplicationHandler,
-    dpi::PhysicalSize,
+    dpi::{PhysicalPosition, PhysicalSize},
     event::{KeyEvent, MouseButton, TouchPhase, WindowEvent},
     event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy},
     keyboard::PhysicalKey,
@@ -53,6 +53,7 @@ struct Running {
     physics: PhysicsState,
     last_frame: web_time::Instant,
     fps: FpsCounter,
+    surface_per_css: f32,
 }
 
 /// Average fps, updated once per `FPS_PERIOD` so the number is readable.
@@ -181,6 +182,7 @@ impl Running {
         let (w, h) = render.resize(size.width, size.height);
         let mut letterbox = Letterbox::new(WORLD, true);
         letterbox.resize(w as f32, h as f32);
+        let surface_per_css = surface_per_css(&window, w);
         Self {
             window,
             render,
@@ -189,6 +191,7 @@ impl Running {
             physics: PhysicsState::with_jitter(|| rand::random_range(-1.0..=1.0)),
             last_frame: web_time::Instant::now(),
             fps: FpsCounter::default(),
+            surface_per_css,
         }
     }
 
@@ -208,6 +211,7 @@ impl Running {
             WindowEvent::Resized(PhysicalSize { width, height }) => {
                 let (w, h) = self.render.resize(width, height);
                 self.letterbox.resize(w as f32, h as f32);
+                self.surface_per_css = surface_per_css(&self.window, w);
             }
             WindowEvent::RedrawRequested => {
                 self.redraw();
@@ -221,18 +225,11 @@ impl Running {
             } => {
                 self.input.update_cursor_buttons(state.is_pressed());
             }
-            // Positions are in surface pixels, the same space as the letterbox field.
             WindowEvent::CursorMoved { position, .. } => {
-                let pos = self
-                    .letterbox
-                    .to_world(position.x as f32, position.y as f32);
-                self.input.update_cursor_pos(pos);
+                self.update_pointer(position);
             }
             WindowEvent::Touch(t) => {
-                let pos = self
-                    .letterbox
-                    .to_world(t.location.x as f32, t.location.y as f32);
-                self.input.update_cursor_pos(pos);
+                self.update_pointer(t.location);
                 match t.phase {
                     TouchPhase::Started => self.input.update_cursor_buttons(true),
                     TouchPhase::Ended => self.input.update_cursor_buttons(false),
@@ -241,6 +238,13 @@ impl Running {
             }
             _ => (),
         }
+    }
+
+    fn update_pointer(&mut self, pos: PhysicalPosition<f64>) {
+        // Workaround for the winit web pointer scale bug, see `surface_per_css`.
+        let k = self.surface_per_css / self.window.scale_factor() as f32;
+        let (x, y) = (pos.x as f32 * k, pos.y as f32 * k);
+        self.input.update_cursor_pos(self.letterbox.to_world(x, y));
     }
 
     fn redraw(&mut self) {
@@ -261,9 +265,22 @@ impl Running {
         };
 
         self.render.update_frame(&self.letterbox, physics);
-        let scale_factor = self.window.scale_factor() as f32;
         self.render
-            .render(self.letterbox.field(), scale_factor, &text);
+            .render(self.letterbox.field(), self.surface_per_css, &text);
+    }
+}
+
+/// Surface pixels per CSS pixel, measured from the canvas.
+///
+/// Workaround for a winit 0.30 web bug: pointer positions are CSS px * devicePixelRatio,
+/// but the canvas buffer is sized from `devicePixelContentBoxSize`. On some phones the two
+/// ratios differ, and touches drift away from the finger towards the bottom right.
+/// Remove when winit gives pointer positions in canvas buffer pixels.
+fn surface_per_css(window: &Window, surface_w: u32) -> f32 {
+    use winit::platform::web::WindowExtWebSys;
+    match window.canvas().map(|c| c.client_width()) {
+        Some(css_w) if css_w > 0 => surface_w as f32 / css_w as f32,
+        _ => window.scale_factor() as f32,
     }
 }
 

@@ -113,8 +113,8 @@ impl Render {
     }
 
     /// `field` is the letterbox field in surface pixels.
-    /// `scale_factor` is the device pixel ratio: the surface is in physical pixels.
-    pub fn render(&mut self, field: Rect, scale_factor: f32, text: &str) {
+    /// `surface_per_css`: surface pixels per CSS pixel, to keep text size in CSS pixels.
+    pub fn render(&mut self, field: Rect, surface_per_css: f32, text: &str) {
         let frame = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(frame)
             | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
@@ -163,8 +163,8 @@ impl Render {
 
         // Text is an overlay over the whole surface, in pixels.
         rpass.set_viewport(0.0, 0.0, w, h, 0.0, 1.0);
-        let text_section =
-            TextSection::default().add_text(Text::new(text).with_scale(TEXT_SIZE * scale_factor));
+        let text_section = TextSection::default()
+            .add_text(Text::new(text).with_scale(TEXT_SIZE * surface_per_css));
         match self
             .text_brush
             .queue(&self.device, &self.queue, vec![&text_section])
