@@ -1,20 +1,17 @@
-mod draw_primitives;
 mod gpu_buffer;
-mod math;
+mod mesh;
 
 use bytemuck::{Pod, Zeroable};
 use std::borrow::Cow;
-use wgpu::{RenderPipeline, Surface};
+use wgpu::RenderPipeline;
 use wgpu_text::{
     BrushBuilder, TextBrush,
     glyph_brush::{Section as TextSection, Text, ab_glyph::FontRef},
 };
 
-use crate::buttons::BUTTONS;
-use crate::letterbox::{Letterbox, Rect};
-use draw_primitives::Mesh;
+use crate::letterbox::Rect;
 use gpu_buffer::GpuBuffer;
-use physics::PhysicsState;
+pub use mesh::Mesh;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
@@ -35,44 +32,15 @@ impl Vertex {
     }
 }
 
-const GRAY_BACKGROUND: wgpu::Color = wgpu::Color {
-    r: 0.66, // 167/256
-    g: 0.66,
-    b: 0.66,
-    a: 1.0,
-};
-
-// Text size in CSS pixels; scaled by the device pixel ratio.
+// Text size in CSS pixels.
 const TEXT_SIZE: f32 = 16.0;
-
-const GRAY_BARS: wgpu::Color = wgpu::Color {
-    r: 0.5,
-    g: 0.5,
-    b: 0.5,
-    a: 1.0,
-};
-
-const GRAY_BUTTON: wgpu::Color = wgpu::Color {
-    r: 0.77,
-    g: 0.77,
-    b: 0.77,
-    a: 1.0,
-};
-
-pub struct Size {
-    pub width: u32,
-    pub height: u32,
-}
 
 pub struct Render {
     surface: wgpu::Surface<'static>,
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
-    size: Size,
     render_pipeline: wgpu::RenderPipeline,
-
-    mesh: Mesh,
     vertex_buffer: GpuBuffer,
     index_buffer: GpuBuffer,
 
@@ -85,16 +53,13 @@ impl Render {
         width: u32,
         height: u32,
     ) -> Result<Render, String> {
-        let size = Size {
-            width: width.max(1),
-            height: height.max(1),
-        };
         let (surface, adapter, device, queue) = init_screen(window).await?;
 
-        let config = config_surface(&surface, &adapter, &size);
+        let (width, height) = surface_size(&device, width, height);
+        let config = config_surface(&surface, &adapter, width, height);
         surface.configure(&device, &config);
 
-        let render_pipeline = setup_render(&device, &surface, &adapter, &config);
+        let render_pipeline = setup_render(&device, &config);
         let vertex_buffer = GpuBuffer::new(&device, "Vertex Buffer", wgpu::BufferUsages::VERTEX);
         let index_buffer = GpuBuffer::new(&device, "Index Buffer", wgpu::BufferUsages::INDEX);
         let text_brush = init_text(&device, &config)?;
@@ -103,18 +68,29 @@ impl Render {
             device,
             queue,
             config,
-            size,
             render_pipeline,
-            mesh: Mesh::default(),
             vertex_buffer,
             index_buffer,
             text_brush,
         })
     }
 
-    /// `field` is the letterbox field in surface pixels.
+    /// `mesh` is in clip space of the `field` viewport; `field` is in surface pixels.
     /// `surface_per_css`: surface pixels per CSS pixel, to keep text size in CSS pixels.
-    pub fn render(&mut self, field: Rect, surface_per_css: f32, text: &str) {
+    pub fn draw(
+        &mut self,
+        mesh: &Mesh,
+        clear: [f32; 3],
+        field: Rect,
+        surface_per_css: f32,
+        text: &str,
+    ) {
+        let (device, queue) = (&self.device, &self.queue);
+        self.vertex_buffer
+            .upload(device, queue, bytemuck::cast_slice(&mesh.vertices));
+        self.index_buffer
+            .upload(device, queue, bytemuck::cast_slice(&mesh.indices));
+
         let frame = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(frame)
             | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
@@ -138,7 +114,12 @@ impl Render {
                 view: &view,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(GRAY_BARS),
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: clear[0].into(),
+                        g: clear[1].into(),
+                        b: clear[2].into(),
+                        a: 1.0,
+                    }),
                     store: wgpu::StoreOp::Store,
                 },
                 depth_slice: None,
@@ -149,16 +130,16 @@ impl Render {
             multiview_mask: None,
         });
 
-        let (w, h) = (self.size.width as f32, self.size.height as f32);
+        let (w, h) = (self.config.width as f32, self.config.height as f32);
         // Float rounding must not push the viewport out of the surface.
         let x = field.x.clamp(0.0, w);
         let y = field.y.clamp(0.0, h);
         rpass.set_viewport(x, y, field.w.min(w - x), field.h.min(h - y), 0.0, 1.0);
-        if !self.mesh.indices.is_empty() {
+        if !mesh.indices.is_empty() {
             rpass.set_pipeline(&self.render_pipeline);
             rpass.set_vertex_buffer(0, self.vertex_buffer.slice());
             rpass.set_index_buffer(self.index_buffer.slice(), wgpu::IndexFormat::Uint32);
-            rpass.draw_indexed(0..self.mesh.indices.len() as u32, 0, 0..1);
+            rpass.draw_indexed(0..mesh.indices.len() as u32, 0, 0..1);
         }
 
         // Text is an overlay over the whole surface, in pixels.
@@ -178,43 +159,13 @@ impl Render {
         self.queue.present(frame);
     }
 
-    pub fn update_frame(&mut self, letterbox: &Letterbox, physics: &PhysicsState) {
-        let mesh = &mut self.mesh;
-        mesh.clear();
-        mesh.push_rect(letterbox.world(), &GRAY_BACKGROUND);
-        for b in BUTTONS {
-            mesh.push_bordered_rectangle(&b.rect, &GRAY_BUTTON);
-            mesh.push_icon(&b.icon);
-        }
-        for r in physics.rectangles() {
-            mesh.push_bordered_rectangle(&r, &GRAY_BACKGROUND);
-        }
-        for p in physics.collide_points() {
-            mesh.push_point(&p);
-        }
-        for l in physics.joint_lines() {
-            mesh.push_line(&l);
-        }
-        mesh.map_positions(|p| letterbox.world_to_ndc(p));
-
-        let (device, queue) = (&self.device, &self.queue);
-        self.vertex_buffer
-            .upload(device, queue, bytemuck::cast_slice(&mesh.vertices));
-        self.index_buffer
-            .upload(device, queue, bytemuck::cast_slice(&mesh.indices));
-    }
-
     /// Returns the size actually used: the GPU limits the surface size.
     pub fn resize(&mut self, width: u32, height: u32) -> (u32, u32) {
-        let max = self.device.limits().max_texture_dimension_2d;
-        self.size.width = width.clamp(1, max);
-        self.size.height = height.clamp(1, max);
-        self.config.width = self.size.width;
-        self.config.height = self.size.height;
+        (self.config.width, self.config.height) = surface_size(&self.device, width, height);
         self.surface.configure(&self.device, &self.config);
-        self.text_brush
-            .resize_view(self.size.width as f32, self.size.height as f32, &self.queue);
-        (self.size.width, self.size.height)
+        let (w, h) = (self.config.width, self.config.height);
+        self.text_brush.resize_view(w as f32, h as f32, &self.queue);
+        (w, h)
     }
 }
 
@@ -272,7 +223,6 @@ async fn init_screen(
         wgpu::Limits::downlevel_webgl2_defaults()
     };
 
-    // Create the logical device and command queue
     let (device, queue) = adapter
         .request_device(&wgpu::DeviceDescriptor {
             label: Some("WGPU Device"),
@@ -288,13 +238,7 @@ async fn init_screen(
     Ok((surface, adapter, device, queue))
 }
 
-pub fn setup_render(
-    device: &wgpu::Device,
-    _surface: &wgpu::Surface<'_>,
-    _adapter: &wgpu::Adapter,
-    config: &wgpu::SurfaceConfiguration,
-) -> RenderPipeline {
-    // Load the shaders from disk
+fn setup_render(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration) -> RenderPipeline {
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: None,
         source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader_square.wgsl"))),
@@ -305,8 +249,6 @@ pub fn setup_render(
         bind_group_layouts: &[],
         immediate_size: 0,
     });
-
-    //let swapchain_capabilities = surface.get_capabilities(&adapter);
 
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: None,
@@ -342,25 +284,33 @@ pub fn setup_render(
     })
 }
 
+/// Zero is not a valid surface size, and the GPU limits the maximum.
+fn surface_size(device: &wgpu::Device, width: u32, height: u32) -> (u32, u32) {
+    let max = device.limits().max_texture_dimension_2d;
+    (width.clamp(1, max), height.clamp(1, max))
+}
+
 fn config_surface(
-    surface: &Surface,
+    surface: &wgpu::Surface,
     adapter: &wgpu::Adapter,
-    size: &Size,
+    width: u32,
+    height: u32,
 ) -> wgpu::SurfaceConfiguration {
     let surface_capabilities = surface.get_capabilities(adapter);
     let surface_format = surface_capabilities
         .formats
         .iter()
         .copied()
-        .find(|f| !f.is_srgb()) // egui wants a non-srgb surface texture
+        // Colors are sRGB values written as is: no conversion on store.
+        .find(|f| !f.is_srgb())
         .unwrap_or(surface_capabilities.formats[0]);
 
     wgpu::SurfaceConfiguration {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         format: surface_format,
         color_space: wgpu::SurfaceColorSpace::Auto,
-        width: size.width,
-        height: size.height,
+        width,
+        height,
         present_mode: surface_capabilities.present_modes[0],
         alpha_mode: surface_capabilities.alpha_modes[0],
         view_formats: vec![],

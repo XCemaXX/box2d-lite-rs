@@ -12,25 +12,23 @@ impl Rect {
         Self { x, y, w, h }
     }
 
-    fn contains(&self, x: f32, y: f32) -> bool {
+    pub fn contains(&self, x: f32, y: f32) -> bool {
         x >= self.x && x <= self.x + self.w && y >= self.y && y <= self.y + self.h
     }
 }
 
 /// Fits a world rectangle into the surface with one scale for both axes.
-/// The rest of the surface is bars. Screen space is surface pixels, y down.
+/// The rest of the surface is bars. Screen space is surface pixels, y down;
+/// world y grows up, as in physics.
 pub struct Letterbox {
     world: Rect,
-    y_up: bool,
     field: Rect,
 }
 
 impl Letterbox {
-    /// `y_up`: world y grows up, as in physics.
-    pub fn new(world: Rect, y_up: bool) -> Self {
+    pub fn new(world: Rect) -> Self {
         Self {
             world,
-            y_up,
             field: world,
         }
     }
@@ -55,7 +53,7 @@ impl Letterbox {
     pub fn world_to_ndc(&self, p: [f32; 2]) -> [f32; 2] {
         let x = (p[0] - self.world.x) / self.world.w * 2.0 - 1.0;
         let y = (p[1] - self.world.y) / self.world.h * 2.0 - 1.0;
-        [x, if self.y_up { y } else { -y }]
+        [x, y]
     }
 
     /// Screen pixel to world point, `None` outside the field.
@@ -65,7 +63,7 @@ impl Letterbox {
         }
         let u = (x - self.field.x) / self.field.w;
         let v = (y - self.field.y) / self.field.h;
-        let v = if self.y_up { 1.0 - v } else { v };
+        let v = 1.0 - v;
         Some([
             self.world.x + u * self.world.w,
             self.world.y + v * self.world.h,
@@ -78,32 +76,29 @@ mod tests {
     use super::*;
 
     // 16:9 world in a square surface: bars at top and bottom.
-    fn letterbox(y_up: bool) -> Letterbox {
-        let mut lb = Letterbox::new(Rect::new(-8.0, -4.5, 16.0, 9.0), y_up);
+    fn letterbox() -> Letterbox {
+        let mut lb = Letterbox::new(Rect::new(-8.0, -4.5, 16.0, 9.0));
         lb.resize(800.0, 800.0);
         lb
     }
 
     #[test]
     fn field_is_centered() {
-        assert_eq!(letterbox(true).field(), Rect::new(0.0, 175.0, 800.0, 450.0));
+        assert_eq!(letterbox().field(), Rect::new(0.0, 175.0, 800.0, 450.0));
     }
 
     #[test]
     fn to_world_corners() {
-        let lb = letterbox(true);
+        let lb = letterbox();
         assert_eq!(lb.to_world(0.0, 175.0), Some([-8.0, 4.5]));
         assert_eq!(lb.to_world(800.0, 625.0), Some([8.0, -4.5]));
         assert_eq!(lb.to_world(400.0, 100.0), None);
-        let lb = letterbox(false);
-        assert_eq!(lb.to_world(0.0, 175.0), Some([-8.0, -4.5]));
     }
 
     #[test]
     fn world_to_ndc_corners() {
-        let lb = letterbox(true);
+        let lb = letterbox();
         assert_eq!(lb.world_to_ndc([-8.0, -4.5]), [-1.0, -1.0]);
         assert_eq!(lb.world_to_ndc([8.0, 4.5]), [1.0, 1.0]);
-        assert_eq!(letterbox(false).world_to_ndc([-8.0, -4.5]), [-1.0, 1.0]);
     }
 }

@@ -1,130 +1,37 @@
-use crate::buttons::{Action, BUTTONS};
-use winit::keyboard::KeyCode;
+//! winit input to game events and world coordinates.
+use winit::{dpi::PhysicalPosition, keyboard::KeyCode, window::Window};
 
-pub enum Event {
-    Restart,
-    CreateBox(f32, f32),
-    RunScene(usize),
-    ChangeToNextScene,
-    ChangeToPrevScene,
+use crate::game::Event;
+
+pub fn key_event(key: KeyCode) -> Option<Event> {
+    Some(match key {
+        KeyCode::Space => Event::Restart,
+        KeyCode::KeyN => Event::NextScene,
+        KeyCode::KeyP => Event::PrevScene,
+        // Digit1..=Digit9 are declared in order in winit.
+        digit => match (digit as usize).wrapping_sub(KeyCode::Digit1 as usize) {
+            n @ 0..=8 => Event::RunScene(n),
+            _ => return None,
+        },
+    })
 }
 
-#[derive(Default)]
-pub struct InputState {
-    cursor: CursorState,
-    keyboard: KeyBoardState,
-    events: Vec<Event>,
+/// Pointer position from winit to surface pixels.
+pub fn to_surface(window: &Window, surface_per_css: f32, pos: PhysicalPosition<f64>) -> [f32; 2] {
+    let k = surface_per_css / window.scale_factor() as f32;
+    [pos.x as f32 * k, pos.y as f32 * k]
 }
 
-impl InputState {
-    pub fn update_cursor_buttons(&mut self, pressed: bool) {
-        self.cursor.update_buttons(pressed);
-        if !self.cursor.button_pressed {
-            return;
-        }
-        // Outside the field: a click on the bars does nothing.
-        if let Some([x, y]) = self.cursor.pos {
-            let event = match BUTTONS.iter().find(|b| b.in_button(x, y)) {
-                Some(b) => match b.action {
-                    Action::Prev => Event::ChangeToPrevScene,
-                    Action::Restart => Event::Restart,
-                    Action::Next => Event::ChangeToNextScene,
-                },
-                None => Event::CreateBox(x, y),
-            };
-            self.events.push(event);
-        }
-    }
-
-    pub fn update_cursor_pos(&mut self, pos: Option<[f32; 2]>) {
-        self.cursor.pos = pos;
-    }
-
-    pub fn update_keyboard(&mut self, pressed: bool, key: KeyCode) {
-        self.keyboard.update(pressed, key);
-        if self.keyboard.space_pressed {
-            self.events.push(Event::Restart);
-        }
-        if self.keyboard.digit_pressed {
-            self.events.push(Event::RunScene(self.keyboard.digit_num));
-        }
-        if self.keyboard.letter_pressed {
-            match self.keyboard.letter {
-                KeyLetters::N => self.events.push(Event::ChangeToNextScene),
-                KeyLetters::P => self.events.push(Event::ChangeToPrevScene),
-                _ => {}
-            }
-        }
-    }
-
-    pub fn pop_event(&mut self) -> Option<Event> {
-        self.events.pop()
-    }
-}
-
-impl std::fmt::Display for InputState {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.cursor.pos {
-            Some([x, y]) => write!(f, "Mouse: {x:.3} {y:.3}"),
-            None => write!(f, "Mouse: outside"),
-        }
-    }
-}
-
-#[derive(Default)]
-pub struct CursorState {
-    button_pressed: bool,
-    pos: Option<[f32; 2]>,
-}
-
-impl CursorState {
-    fn update_buttons(&mut self, pressed: bool) {
-        self.button_pressed = pressed;
-    }
-}
-
-#[derive(Debug, Default)]
-enum KeyLetters {
-    #[default]
-    None,
-    N,
-    P,
-}
-
-#[derive(Debug, Default)]
-pub struct KeyBoardState {
-    space_pressed: bool,
-    digit_pressed: bool,
-    digit_num: usize,
-    letter_pressed: bool,
-    letter: KeyLetters,
-}
-
-impl KeyBoardState {
-    fn update(&mut self, pressed: bool, key: KeyCode) {
-        const DIGIT_START: usize = KeyCode::Digit1 as usize;
-        const DIGIT_END: usize = KeyCode::Digit9 as usize;
-
-        let k = match key {
-            KeyCode::Space => &mut self.space_pressed,
-            KeyCode::KeyN => {
-                self.letter = KeyLetters::N;
-                &mut self.letter_pressed
-            }
-            KeyCode::KeyP => {
-                self.letter = KeyLetters::P;
-                &mut self.letter_pressed
-            }
-            digit => match digit as usize {
-                DIGIT_START..=DIGIT_END => {
-                    self.digit_num = digit as usize - DIGIT_START;
-                    &mut self.digit_pressed
-                }
-                _ => {
-                    return;
-                }
-            },
-        };
-        *k = pressed;
+/// Surface pixels per CSS pixel, measured from the canvas.
+///
+/// Workaround for a winit 0.30 web bug: pointer positions are CSS px * devicePixelRatio,
+/// but the canvas buffer is sized from `devicePixelContentBoxSize`. On some phones the two
+/// ratios differ, and touches drift away from the finger towards the bottom right.
+/// Remove with `to_surface` when winit gives pointer positions in canvas buffer pixels.
+pub fn surface_per_css(window: &Window, surface_w: u32) -> f32 {
+    use winit::platform::web::WindowExtWebSys;
+    match window.canvas().map(|c| c.client_width()) {
+        Some(css_w) if css_w > 0 => surface_w as f32 / css_w as f32,
+        _ => window.scale_factor() as f32,
     }
 }
