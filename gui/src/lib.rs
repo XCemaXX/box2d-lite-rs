@@ -9,11 +9,12 @@ use winit::{
     application::ApplicationHandler,
     dpi::PhysicalSize,
     event::{KeyEvent, MouseButton, TouchPhase, WindowEvent},
+    event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy},
     keyboard::PhysicalKey,
-    window::Window,
+    window::{Window, WindowAttributes, WindowId},
 };
 
-use futures::channel::oneshot::Receiver;
+use futures::channel::oneshot;
 use wasm_bindgen::prelude::*;
 
 use input::InputState;
@@ -25,26 +26,28 @@ const WEBAPP_CANVAS_ID: &str = "target";
 const WORLD: Rect = Rect::new(-1.0, -1.0, 2.0, 2.0);
 const FPS_PERIOD: f32 = 0.4;
 
-#[wasm_bindgen]
-extern "C" {
-    fn alert(s: &str);
-    #[wasm_bindgen(js_namespace = console)]
-    fn log(s: &str);
+type RenderResult = Result<Render, String>;
+
+enum State {
+    Uninit,
+    Initializing {
+        window: Arc<Window>,
+        rx: oneshot::Receiver<RenderResult>,
+    },
+    Running(Box<Running>),
+    Failed,
 }
 
-#[derive(Default)]
 pub struct App {
-    window: Option<Arc<Window>>,
-    pending_render: Option<Receiver<Render<'static>>>,
-    running: Option<Running>,
-    // Resize can come before the renderer is ready: keep the size for it.
-    last_size: (u32, u32),
+    // Wake-up only, the data goes through `oneshot`: winit 0.31 drops `user_event(T)`.
+    proxy: EventLoopProxy<()>,
+    state: State,
 }
 
 /// The app after the renderer is ready.
 struct Running {
     window: Arc<Window>,
-    render: Render<'static>,
+    render: Render,
     letterbox: Letterbox,
     input: InputState,
     physics: PhysicsState,
@@ -73,92 +76,122 @@ impl FpsCounter {
 }
 
 impl App {
-    fn try_start(&mut self) {
-        let (Some(receiver), Some(window)) = (self.pending_render.as_mut(), self.window.as_ref())
+    fn new(proxy: EventLoopProxy<()>) -> Self {
+        Self {
+            proxy,
+            state: State::Uninit,
+        }
+    }
+
+    fn create_surfaces(&mut self, event_loop: &ActiveEventLoop) {
+        // A second `resumed` must not create a second window on the same canvas.
+        if !matches!(self.state, State::Uninit) {
+            return;
+        }
+        let window = match window_attributes()
+            .and_then(|a| event_loop.create_window(a).map_err(|e| e.to_string()))
+        {
+            Ok(w) => Arc::new(w),
+            Err(e) => {
+                log::error!("Create window: {e}");
+                self.state = State::Failed;
+                return;
+            }
+        };
+        // May still be zero on the web; `Running::new` resizes again.
+        let size = window.inner_size();
+        let (tx, rx) = oneshot::channel();
+        let (proxy, w) = (self.proxy.clone(), window.clone());
+        wasm_bindgen_futures::spawn_local(async move {
+            let _ = tx.send(Render::new(w, size.width, size.height).await);
+            let _ = proxy.send_event(());
+        });
+        self.state = State::Initializing { window, rx };
+    }
+
+    fn on_wake(&mut self) {
+        let State::Initializing { rx, .. } = &mut self.state else {
+            return;
+        };
+        let result = match rx.try_recv() {
+            Ok(None) => return,
+            Ok(Some(r)) => r,
+            Err(oneshot::Canceled) => Err("render init task dropped".into()),
+        };
+        let State::Initializing { window, .. } = std::mem::replace(&mut self.state, State::Failed)
         else {
+            unreachable!()
+        };
+        match result {
+            Ok(render) => {
+                let running = Running::new(window, render);
+                running.window.request_redraw();
+                self.state = State::Running(Box::new(running));
+            }
+            Err(e) => log::error!("Render init failed: {e}"),
+        }
+    }
+}
+
+impl ApplicationHandler for App {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        self.create_surfaces(event_loop);
+    }
+
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, (): ()) {
+        self.on_wake();
+    }
+
+    fn window_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        _window_id: WindowId,
+        event: WindowEvent,
+    ) {
+        if let WindowEvent::CloseRequested = event {
+            log::info!("Close requested. Exiting...");
+            event_loop.exit();
+            return;
+        }
+        // Events before `Running` are dropped: `on_wake` reads the current size.
+        let State::Running(app) = &mut self.state else {
             return;
         };
-        let Ok(Some(mut render)) = receiver.try_recv() else {
-            return;
-        };
-        self.pending_render = None;
-        let (w, h) = render.resize(self.last_size.0, self.last_size.1);
+        app.handle(event);
+    }
+}
+
+fn window_attributes() -> Result<WindowAttributes, String> {
+    use winit::platform::web::WindowAttributesExtWebSys;
+    let canvas = web_sys::window()
+        .and_then(|w| w.document())
+        .and_then(|d| d.get_element_by_id(WEBAPP_CANVAS_ID))
+        .and_then(|e| e.dyn_into::<web_sys::HtmlCanvasElement>().ok())
+        .ok_or_else(|| format!("no <canvas id={WEBAPP_CANVAS_ID}>"))?;
+    Ok(Window::default_attributes()
+        .with_canvas(Some(canvas))
+        // Keep browser keys (F5, F11, F12) working; CSS already blocks scroll and touch gestures.
+        .with_prevent_default(false))
+}
+
+impl Running {
+    fn new(window: Arc<Window>, mut render: Render) -> Self {
+        // Resizes during init were dropped: take the size now.
+        let size = window.inner_size();
+        let (w, h) = render.resize(size.width, size.height);
         let mut letterbox = Letterbox::new(WORLD, true);
         letterbox.resize(w as f32, h as f32);
-        self.running = Some(Running {
-            window: window.clone(),
+        Self {
+            window,
             render,
             letterbox,
             input: InputState::default(),
             physics: PhysicsState::with_jitter(|| rand::random_range(-1.0..=1.0)),
             last_frame: web_time::Instant::now(),
             fps: FpsCounter::default(),
-        });
-    }
-}
-
-impl ApplicationHandler for App {
-    fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
-        let mut attributes = Window::default_attributes();
-
-        use winit::platform::web::WindowAttributesExtWebSys;
-        let canvas = web_sys::window()
-            .unwrap()
-            .document()
-            .unwrap()
-            .get_element_by_id(WEBAPP_CANVAS_ID)
-            .unwrap()
-            .dyn_into::<web_sys::HtmlCanvasElement>()
-            .unwrap();
-        let canvas_width = canvas.width();
-        let canvas_height = canvas.height();
-        self.last_size = (canvas_width, canvas_height);
-        attributes = attributes.with_canvas(Some(canvas));
-
-        if let Ok(window) = event_loop.create_window(attributes) {
-            let first_window_handle = self.window.is_none();
-            let window_handle = Arc::new(window);
-            self.window = Some(window_handle.clone());
-            if first_window_handle {
-                let (sender, receiver) = futures::channel::oneshot::channel();
-                self.pending_render = Some(receiver);
-                std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-                console_log::init().expect("Failed to initialize logger!");
-                log::info!("Canvas dimensions: ({canvas_width} x {canvas_height})");
-                wasm_bindgen_futures::spawn_local(async move {
-                    let render = Render::new(window_handle, canvas_width, canvas_height).await;
-                    if sender.send(render).is_err() {
-                        log::error!("Failed to create and send render!");
-                    }
-                });
-            }
         }
     }
 
-    fn window_event(
-        &mut self,
-        event_loop: &winit::event_loop::ActiveEventLoop,
-        _window_id: winit::window::WindowId,
-        event: winit::event::WindowEvent,
-    ) {
-        if let WindowEvent::Resized(PhysicalSize { width, height }) = event {
-            self.last_size = (width, height);
-        }
-        self.try_start();
-        let Some(app) = self.running.as_mut() else {
-            return;
-        };
-        if let WindowEvent::CloseRequested = event {
-            log::info!("Close requested. Exiting...");
-            event_loop.exit();
-            return;
-        }
-        app.handle(event);
-        app.window.request_redraw();
-    }
-}
-
-impl Running {
     fn handle(&mut self, event: WindowEvent) {
         match event {
             WindowEvent::KeyboardInput {
@@ -176,7 +209,11 @@ impl Running {
                 let (w, h) = self.render.resize(width, height);
                 self.letterbox.resize(w as f32, h as f32);
             }
-            WindowEvent::RedrawRequested => self.redraw(),
+            WindowEvent::RedrawRequested => {
+                self.redraw();
+                // On the web this is the next requestAnimationFrame.
+                self.window.request_redraw();
+            }
             WindowEvent::MouseInput {
                 state,
                 button: MouseButton::Left,
@@ -257,10 +294,20 @@ fn input_events_to_physics(input_state: &mut InputState, physics_state: &mut Phy
 
 #[wasm_bindgen(start)]
 pub fn start() {
-    //alert("Hello, gui!");
+    // Before the event loop: an early panic must have readable text too.
+    #[cfg(feature = "console_error_panic_hook")]
+    console_error_panic_hook::set_once();
+    console_log::init().expect("Failed to initialize logger!");
 
-    let event_loop = winit::event_loop::EventLoop::builder().build().unwrap();
-    event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
-    let mut app = App::default();
-    event_loop.run_app(&mut app).unwrap();
+    let event_loop = match EventLoop::with_user_event().build() {
+        Ok(el) => el,
+        Err(e) => {
+            log::error!("Create event loop: {e}");
+            return;
+        }
+    };
+    let app = App::new(event_loop.create_proxy());
+    // `run_app` on the web leaves the loop by throwing a JS exception.
+    use winit::platform::web::EventLoopExtWebSys;
+    event_loop.spawn_app(app);
 }

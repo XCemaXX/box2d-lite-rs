@@ -64,8 +64,8 @@ pub struct Size {
     pub height: u32,
 }
 
-pub struct Render<'a> {
-    surface: wgpu::Surface<'a>,
+pub struct Render {
+    surface: wgpu::Surface<'static>,
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
@@ -76,20 +76,20 @@ pub struct Render<'a> {
     vertex_buffer: GpuBuffer,
     index_buffer: GpuBuffer,
 
-    text_brush: TextBrush<FontRef<'a>>,
+    text_brush: TextBrush<FontRef<'static>>,
 }
 
-impl<'a> Render<'a> {
+impl Render {
     pub async fn new(
-        window: impl Into<wgpu::SurfaceTarget<'a>>,
+        window: impl Into<wgpu::SurfaceTarget<'static>>,
         width: u32,
         height: u32,
-    ) -> Render<'a> {
+    ) -> Result<Render, String> {
         let size = Size {
             width: width.max(1),
             height: height.max(1),
         };
-        let (surface, adapter, device, queue) = init_screen(window).await;
+        let (surface, adapter, device, queue) = init_screen(window).await?;
 
         let config = config_surface(&surface, &adapter, &size);
         surface.configure(&device, &config);
@@ -97,8 +97,8 @@ impl<'a> Render<'a> {
         let render_pipeline = setup_render(&device, &surface, &adapter, &config);
         let vertex_buffer = GpuBuffer::new(&device, "Vertex Buffer", wgpu::BufferUsages::VERTEX);
         let index_buffer = GpuBuffer::new(&device, "Index Buffer", wgpu::BufferUsages::INDEX);
-        let text_brush = init_text(&device, &config);
-        Self {
+        let text_brush = init_text(&device, &config)?;
+        Ok(Self {
             surface,
             device,
             queue,
@@ -109,7 +109,7 @@ impl<'a> Render<'a> {
             vertex_buffer,
             index_buffer,
             text_brush,
-        }
+        })
     }
 
     /// `field` is the letterbox field in surface pixels.
@@ -165,10 +165,13 @@ impl<'a> Render<'a> {
         rpass.set_viewport(0.0, 0.0, w, h, 0.0, 1.0);
         let text_section =
             TextSection::default().add_text(Text::new(text).with_scale(TEXT_SIZE * scale_factor));
-        self.text_brush
+        match self
+            .text_brush
             .queue(&self.device, &self.queue, vec![&text_section])
-            .unwrap();
-        self.text_brush.draw(&mut rpass);
+        {
+            Ok(()) => self.text_brush.draw(&mut rpass),
+            Err(e) => log::warn!("Skip text: {e}"),
+        }
         drop(rpass);
 
         self.queue.submit(std::iter::once(encoder.finish()));
@@ -215,24 +218,37 @@ impl<'a> Render<'a> {
     }
 }
 
-fn init_text<'a>(
+fn init_text(
     device: &wgpu::Device,
     config: &wgpu::SurfaceConfiguration,
-) -> TextBrush<FontRef<'a>> {
-    let font: &[u8] = include_bytes!("../../../fonts/DejaVuSans.ttf");
-    BrushBuilder::using_font_bytes(font)
-        .unwrap()
-        /* .initial_cache_size((16_384, 16_384))) */ // use this to avoid resizing cache texture
-        .build(device, config.width, config.height, config.format)
+) -> Result<TextBrush<FontRef<'static>>, String> {
+    let font: &'static [u8] = include_bytes!("../../../fonts/DejaVuSans.ttf");
+    let brush = BrushBuilder::using_font_bytes(font)
+        .map_err(|e| format!("font: {e}"))?
+        .build(device, config.width, config.height, config.format);
+    Ok(brush)
 }
 
-async fn init_screen<'a>(
-    window: impl Into<wgpu::SurfaceTarget<'a>>,
-) -> (wgpu::Surface<'a>, wgpu::Adapter, wgpu::Device, wgpu::Queue) {
-    let instance = wgpu::Instance::default();
+async fn init_screen(
+    window: impl Into<wgpu::SurfaceTarget<'static>>,
+) -> Result<
+    (
+        wgpu::Surface<'static>,
+        wgpu::Adapter,
+        wgpu::Device,
+        wgpu::Queue,
+    ),
+    String,
+> {
+    // navigator.gpu can exist without a usable adapter: then fall back to WebGL2.
+    let instance = wgpu::util::new_instance_with_webgpu_detection(
+        wgpu::InstanceDescriptor::new_without_display_handle(),
+    )
+    .await;
 
-    //window.set_cursor_icon(CursorIcon::Grab);
-    let surface = instance.create_surface(window).unwrap();
+    let surface = instance
+        .create_surface(window)
+        .map_err(|e| format!("create surface: {e}"))?;
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::default(),
@@ -242,23 +258,34 @@ async fn init_screen<'a>(
             apply_limit_buckets: false,
         })
         .await
-        .expect("Failed to find an appropriate adapter");
+        .map_err(|e| format!("request adapter: {e}"))?;
+    log::info!("Backend: {:?}", adapter.get_info().backend);
+
+    // WebGL2 has no compute; WebGPU does. Ask for what the adapter can give.
+    let base_limits = if adapter
+        .get_downlevel_capabilities()
+        .flags
+        .contains(wgpu::DownlevelFlags::COMPUTE_SHADERS)
+    {
+        wgpu::Limits::downlevel_defaults()
+    } else {
+        wgpu::Limits::downlevel_webgl2_defaults()
+    };
 
     // Create the logical device and command queue
     let (device, queue) = adapter
         .request_device(&wgpu::DeviceDescriptor {
             label: Some("WGPU Device"),
             required_features: wgpu::Features::default(),
-            // Make sure we use the texture resolution limits from the adapter, so we can support images the size of the swapchain.
-            required_limits: wgpu::Limits::downlevel_webgl2_defaults()
-                .using_resolution(adapter.limits()),
+            // The surface may be as large as the adapter allows.
+            required_limits: base_limits.using_resolution(adapter.limits()),
             experimental_features: wgpu::ExperimentalFeatures::default(),
             memory_hints: wgpu::MemoryHints::default(),
             trace: wgpu::Trace::Off,
         })
         .await
-        .expect("Failed to create device");
-    (surface, adapter, device, queue)
+        .map_err(|e| format!("request device: {e}"))?;
+    Ok((surface, adapter, device, queue))
 }
 
 pub fn setup_render(
