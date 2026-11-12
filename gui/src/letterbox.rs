@@ -15,6 +15,18 @@ impl Rect {
     pub fn contains(&self, x: f32, y: f32) -> bool {
         x >= self.x && x <= self.x + self.w && y >= self.y && y <= self.y + self.h
     }
+
+    /// Shrinks by `d` on every side; never below zero size.
+    pub fn inset(&self, d: f32) -> Rect {
+        let dx = d.min(self.w / 2.0);
+        let dy = d.min(self.h / 2.0);
+        Rect::new(
+            self.x + dx,
+            self.y + dy,
+            self.w - 2.0 * dx,
+            self.h - 2.0 * dy,
+        )
+    }
 }
 
 /// Fits a world rectangle into the surface with one scale for both axes.

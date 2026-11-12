@@ -8,8 +8,8 @@ mod scene;
 use std::sync::Arc;
 use winit::{
     application::ApplicationHandler,
-    dpi::{PhysicalPosition, PhysicalSize},
-    event::{ElementState, KeyEvent, MouseButton, TouchPhase, WindowEvent},
+    dpi::PhysicalSize,
+    event::{ElementState, KeyEvent, WindowEvent},
     event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy},
     keyboard::PhysicalKey,
     window::{Window, WindowAttributes, WindowId},
@@ -19,6 +19,7 @@ use futures::channel::oneshot;
 use wasm_bindgen::prelude::*;
 
 use game::Game;
+use input::{Pointer, PointerMapper};
 use layout::WORLD;
 use letterbox::Letterbox;
 use render::{Mesh, Render};
@@ -48,8 +49,7 @@ struct Running {
     mesh: Mesh,
     letterbox: Letterbox,
     surface_per_css: f32,
-    // Raw winit position: the world position changes on resize.
-    last_pointer: Option<PhysicalPosition<f64>>,
+    pointer: PointerMapper,
     last_frame: web_time::Instant,
     game: Game,
 }
@@ -145,7 +145,7 @@ impl Running {
             mesh: Mesh::default(),
             letterbox: Letterbox::new(WORLD),
             surface_per_css: 1.0,
-            last_pointer: None,
+            pointer: PointerMapper::default(),
             last_frame: web_time::Instant::now(),
             game: Game::new(),
         };
@@ -159,8 +159,9 @@ impl Running {
         let (w, h) = self.render.resize(size.width, size.height);
         self.letterbox.resize(w as f32, h as f32);
         self.surface_per_css = input::surface_per_css(&self.window, w);
-        if let Some(pos) = self.last_pointer {
-            self.update_pointer(pos);
+        // The world position under a still pointer changes with the letterbox.
+        if let Some(p) = self.pointer.last(&self.window, self.surface_per_css) {
+            self.pointer_moved(p);
         }
     }
 
@@ -181,34 +182,24 @@ impl Running {
                 }
             }
             WindowEvent::Resized(size) => self.resize(size),
+            WindowEvent::ScaleFactorChanged { .. } => self.resize(self.window.inner_size()),
             WindowEvent::RedrawRequested => {
                 self.redraw();
                 // On the web this is the next requestAnimationFrame.
                 self.window.request_redraw();
             }
-            WindowEvent::MouseInput {
-                state: ElementState::Pressed,
-                button: MouseButton::Left,
-                ..
-            } => {
-                self.game.pointer_pressed();
-            }
-            WindowEvent::CursorMoved { position, .. } => {
-                self.update_pointer(position);
-            }
-            WindowEvent::Touch(t) => {
-                self.update_pointer(t.location);
-                if t.phase == TouchPhase::Started {
+            event => match self.pointer.map(&self.window, &event, self.surface_per_css) {
+                Some(Pointer::Moved(p)) => self.pointer_moved(p),
+                Some(Pointer::Pressed(p)) => {
+                    self.pointer_moved(p);
                     self.game.pointer_pressed();
                 }
-            }
-            _ => (),
+                None => {}
+            },
         }
     }
 
-    fn update_pointer(&mut self, pos: PhysicalPosition<f64>) {
-        self.last_pointer = Some(pos);
-        let [x, y] = input::to_surface(&self.window, self.surface_per_css, pos);
+    fn pointer_moved(&mut self, [x, y]: [f32; 2]) {
         self.game.pointer_moved(self.letterbox.to_world(x, y));
     }
 
